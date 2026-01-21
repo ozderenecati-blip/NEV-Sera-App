@@ -18,7 +18,7 @@ dependencies:
   fl_chart: ^0.68.0
   http: ^1.2.0
   flutter_local_notifications: ^18.0.1
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.4
   excel: ^4.0.6
   share_plus: ^12.0.1
   # Modern UI paketleri
@@ -28,6 +28,9 @@ dependencies:
   flutter_animate: ^4.5.0
   vibration: ^2.0.0
   smooth_page_indicator: ^1.1.0
+  firebase_core: ^4.4.0
+  cloud_firestore: ^6.1.2
+  idb_shim: ^2.7.1+2
 
 dev_dependencies:
   flutter_test:

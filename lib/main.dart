@@ -2,24 +2,63 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:firebase_core/firebase_core.dart';
 import 'providers/app_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notification_service.dart';
+import 'config/firebase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('tr_TR', null);
   
-  // Bildirim servisini başlat
-  await NotificationService().initialize();
+  try {
+    await initializeDateFormatting('tr_TR', null);
+  } catch (e) {
+    print('Date formatting error: $e');
+  }
+  
+  // Firebase'i başlat (hem web hem mobil için)
+  try {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: FirebaseConfig.apiKey,
+        authDomain: FirebaseConfig.authDomain,
+        projectId: FirebaseConfig.projectId,
+        storageBucket: FirebaseConfig.storageBucket,
+        messagingSenderId: FirebaseConfig.messagingSenderId,
+        appId: FirebaseConfig.appId,
+        measurementId: FirebaseConfig.measurementId,
+      ),
+    );
+    print('Firebase initialized successfully');
+  } catch (e) {
+    print('Firebase initialization error: $e');
+  }
+  
+  // Bildirim servisini başlat (sadece mobilde)
+  if (!kIsWeb) {
+    try {
+      await NotificationService().initialize();
+    } catch (e) {
+      print('Notification error: $e');
+    }
+  }
   
   // Login ve onboarding durumunu kontrol et
-  final prefs = await SharedPreferences.getInstance();
-  final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-  final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+  bool isLoggedIn = false;
+  bool onboardingCompleted = false;
+  
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
+  } catch (e) {
+    print('SharedPreferences error: $e');
+  }
   
   runApp(NevSeracilikApp(
     isLoggedIn: isLoggedIn,

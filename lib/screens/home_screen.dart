@@ -9,7 +9,6 @@ import '../models/kasa_hareketi.dart';
 import '../widgets/modern_widgets.dart';
 import 'kasa_screen.dart';
 import 'kredi_screen.dart';
-import 'raporlar_screen.dart';
 import 'settings_screen.dart';
 import 'gider_pusulasi_screen.dart';
 import 'ortaklar_screen.dart';
@@ -1209,7 +1208,7 @@ class DashboardTab extends StatelessWidget {
                   child: Column(
                     children: [
                       Text(
-                        'Gündelikçi Ödemeleri',
+                        'Çalışan Ödemeleri',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 12,
@@ -1247,93 +1246,6 @@ class DashboardTab extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrtaklarOzet(
-    BuildContext context,
-    AppProvider provider,
-    NumberFormat fmt,
-  ) {
-    final ozet = provider.ortakOzet;
-    final toplamVerilen = ozet['toplam_verilen'] ?? 0.0;
-    final kalanBorc = ozet['kalan_borc'] ?? 0.0;
-
-    return Card(
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const OrtaklarScreen()),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.people, color: Colors.blue),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Ortaklar',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Ortakların Verdiği',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          fmt.format(toplamVerilen),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          'Kalan Borç',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          fmt.format(kalanBorc),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: kalanBorc > 0 ? Colors.red : Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ),
     );

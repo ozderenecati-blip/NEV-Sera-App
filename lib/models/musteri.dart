@@ -87,7 +87,7 @@ class Musteri {
       sehir: map['sehir'],
       musteriTipi: map['musteri_tipi'] ?? 'bireysel',
       vadeGunu: (map['vade_gunu'] ?? 0).toDouble(),
-      aktif: map['aktif'] == 1,
+      aktif: map['aktif'] == 1 || map['aktif'] == true,
       notlar: map['notlar'],
       createdAt: map['created_at'] != null 
           ? DateTime.parse(map['created_at']) 

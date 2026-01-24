@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/gundelikci.dart';
+import '../widgets/ux_components.dart';
 
 class GiderPusulasiScreen extends StatelessWidget {
   const GiderPusulasiScreen({super.key});
@@ -25,31 +26,23 @@ class GiderPusulasiScreen extends StatelessWidget {
       body: Consumer<AppProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const SkeletonListView(itemCount: 4);
           }
 
           final gundelikciler = provider.gundelikciler;
 
           if (gundelikciler.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_outline, size: 64, color: Colors.grey.shade400),
-                  const SizedBox(height: 16),
-                  Text('Çalışan bulunamadı', style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () => _showGundelikciDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Çalışan Ekle'),
-                  ),
-                ],
-              ),
+            return EmptyStateWidget(
+              icon: Icons.person_outline,
+              title: 'Çalışan bulunamadı',
+              subtitle: 'Çalışanlarınızı ekleyerek gider pusulanızı yönetin',
+              buttonText: 'Çalışan Ekle',
+              onButtonPressed: () => _showGundelikciDialog(context),
+              iconColor: Colors.orange,
             );
           }
 
-          return RefreshIndicator(
+          return RefreshableList(
             onRefresh: () => provider.loadAllData(),
             child: ListView(
               padding: const EdgeInsets.all(16),

@@ -16,6 +16,40 @@ class DatabaseService {
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
+  // Firebase doc.id -> int id mapping (hashCode çakışmasını önlemek için)
+  final Map<String, Map<int, String>> _idMaps = {
+    'kasa_hareketleri': {},
+    'gundelikciler': {},
+    'krediler': {},
+    'kredi_taksitleri': {},
+    'ortaklar': {},
+    'yaklasan_odemeler': {},
+    'musteriler': {},
+    'satislar': {},
+    'tahsilatlar': {},
+    'settings': {},
+  };
+  
+  int _autoId = 1;
+  
+  int _getIntId(String collection, String docId) {
+    // Eğer bu docId için zaten bir int id varsa, onu döndür
+    final map = _idMaps[collection]!;
+    for (var entry in map.entries) {
+      if (entry.value == docId) {
+        return entry.key;
+      }
+    }
+    // Yoksa yeni bir id ata
+    final newId = _autoId++;
+    map[newId] = docId;
+    return newId;
+  }
+  
+  String? _getDocId(String collection, int intId) {
+    return _idMaps[collection]?[intId];
+  }
+
   // ==================== KASA ====================
   Future<int> insertKasaHareketi(KasaHareketi hareket) async {
     try {
@@ -33,7 +67,7 @@ class DatabaseService {
         'islem_kaynagi': hareket.islemKaynagi,
         'iliskili_id': hareket.iliskiliId,
       });
-      return docRef.id.hashCode.abs();
+      return _getIntId('kasa_hareketleri', docRef.id);
     } catch (e) {
       print('insertKasaHareketi error: $e');
       return -1;
@@ -45,7 +79,7 @@ class DatabaseService {
       final snapshot = await _db.collection('kasa_hareketleri').get();
       List<KasaHareketi> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('kasa_hareketleri', doc.id);
         return KasaHareketi.fromMap(data);
       }).toList();
       
@@ -65,25 +99,22 @@ class DatabaseService {
 
   Future<int> updateKasaHareketi(KasaHareketi hareket) async {
     try {
-      final snapshot = await _db.collection('kasa_hareketleri').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == hareket.id) {
-          await doc.reference.update({
-            'tarih': hareket.tarih.toIso8601String(),
-            'aciklama': hareket.aciklama,
-            'islem_tipi': hareket.islemTipi,
-            'tutar': hareket.tutar,
-            'odeme_bicimi': hareket.odemeBicimi,
-            'kasa': hareket.kasa,
-            'notlar': hareket.notlar,
-            'para_birimi': hareket.paraBirimi,
-            'doviz_kuru': hareket.dovizKuru,
-            'tl_karsiligi': hareket.tlKarsiligi,
-          });
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('kasa_hareketleri', hareket.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('kasa_hareketleri').doc(docId).update({
+        'tarih': hareket.tarih.toIso8601String(),
+        'aciklama': hareket.aciklama,
+        'islem_tipi': hareket.islemTipi,
+        'tutar': hareket.tutar,
+        'odeme_bicimi': hareket.odemeBicimi,
+        'kasa': hareket.kasa,
+        'notlar': hareket.notlar,
+        'para_birimi': hareket.paraBirimi,
+        'doviz_kuru': hareket.dovizKuru,
+        'tl_karsiligi': hareket.tlKarsiligi,
+      });
+      return 1;
     } catch (e) {
       print('updateKasaHareketi error: $e');
       return 0;
@@ -92,14 +123,12 @@ class DatabaseService {
 
   Future<int> deleteKasaHareketi(int id) async {
     try {
-      final snapshot = await _db.collection('kasa_hareketleri').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.delete();
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('kasa_hareketleri', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('kasa_hareketleri').doc(docId).delete();
+      _idMaps['kasa_hareketleri']!.remove(id);
+      return 1;
     } catch (e) {
       print('deleteKasaHareketi error: $e');
       return 0;
@@ -109,20 +138,30 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getKasaBakiyeleri() async {
     try {
       final hareketler = await getKasaHareketleri();
-      final Map<String, double> bakiyeler = {};
+      final Map<String, Map<String, double>> bakiyeler = {};
       
       for (var h in hareketler) {
-        final kasa = h.kasa ?? 'Genel';
+        // Kasa null olanları (resmileştirme gibi) dahil etme
+        if (h.kasa == null || h.kasa!.isEmpty) continue;
+        
+        final kasa = h.kasa!;
         final tutar = h.tlKarsiligi ?? h.tutar;
-        bakiyeler[kasa] ??= 0;
+        bakiyeler[kasa] ??= {'bakiye': 0, 'toplam_giris': 0, 'toplam_cikis': 0};
         if (h.islemTipi == 'Giriş') {
-          bakiyeler[kasa] = bakiyeler[kasa]! + tutar;
-        } else {
-          bakiyeler[kasa] = bakiyeler[kasa]! - tutar;
+          bakiyeler[kasa]!['bakiye'] = bakiyeler[kasa]!['bakiye']! + tutar;
+          bakiyeler[kasa]!['toplam_giris'] = bakiyeler[kasa]!['toplam_giris']! + tutar;
+        } else if (h.islemTipi == 'Çıkış') {
+          bakiyeler[kasa]!['bakiye'] = bakiyeler[kasa]!['bakiye']! - tutar;
+          bakiyeler[kasa]!['toplam_cikis'] = bakiyeler[kasa]!['toplam_cikis']! + tutar;
         }
       }
       
-      return bakiyeler.entries.map((e) => {'kasa': e.key, 'bakiye': e.value}).toList();
+      return bakiyeler.entries.map((e) => {
+        'kasa': e.key, 
+        'bakiye': e.value['bakiye'], 
+        'toplam_giris': e.value['toplam_giris'],
+        'toplam_cikis': e.value['toplam_cikis'],
+      }).toList();
     } catch (e) {
       print('getKasaBakiyeleri error: $e');
       return [];
@@ -158,7 +197,7 @@ class DatabaseService {
   Future<int> insertGundelikci(Gundelikci g) async {
     try {
       final docRef = await _db.collection('gundelikciler').add(g.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('gundelikciler', docRef.id);
     } catch (e) {
       print('insertGundelikci error: $e');
       return -1;
@@ -170,7 +209,7 @@ class DatabaseService {
       final snapshot = await _db.collection('gundelikciler').get();
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('gundelikciler', doc.id);
         return Gundelikci.fromMap(data);
       }).where((g) => g.aktif).toList();
     } catch (e) {
@@ -196,14 +235,11 @@ class DatabaseService {
 
   Future<int> updateGundelikci(Gundelikci g) async {
     try {
-      final snapshot = await _db.collection('gundelikciler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == g.id) {
-          await doc.reference.update(g.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('gundelikciler', g.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('gundelikciler').doc(docId).update(g.toMap());
+      return 1;
     } catch (e) {
       print('updateGundelikci error: $e');
       return 0;
@@ -212,14 +248,11 @@ class DatabaseService {
 
   Future<int> deleteGundelikci(int id) async {
     try {
-      final snapshot = await _db.collection('gundelikciler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.update({'aktif': false});
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('gundelikciler', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('gundelikciler').doc(docId).update({'aktif': false});
+      return 1;
     } catch (e) {
       print('deleteGundelikci error: $e');
       return 0;
@@ -259,7 +292,7 @@ class DatabaseService {
       final snapshot = await _db.collection('krediler').get();
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('krediler', doc.id);
         return Kredi.fromMap(data);
       }).toList();
     } catch (e) {
@@ -270,14 +303,11 @@ class DatabaseService {
 
   Future<int> updateKredi(Kredi k) async {
     try {
-      final snapshot = await _db.collection('krediler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == k.id) {
-          await doc.reference.update(k.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('krediler', k.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('krediler').doc(docId).update(k.toMap());
+      return 1;
     } catch (e) {
       print('updateKredi error: $e');
       return 0;
@@ -286,20 +316,20 @@ class DatabaseService {
 
   Future<int> deleteKredi(int id) async {
     try {
-      final snapshot = await _db.collection('krediler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.delete();
-          // Taksitleri de sil
-          final taksitSnapshot = await _db.collection('kredi_taksitleri')
-              .where('kredi_db_id', isEqualTo: id).get();
-          for (var t in taksitSnapshot.docs) {
-            await t.reference.delete();
-          }
-          return 1;
+      final docId = _getDocId('krediler', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('krediler').doc(docId).delete();
+      // Taksitleri de sil (kredi_db_id ile kayıtlı olanları)
+      final taksitSnapshot = await _db.collection('kredi_taksitleri').get();
+      for (var t in taksitSnapshot.docs) {
+        final data = t.data();
+        if (data['kredi_db_id'] == id) {
+          await t.reference.delete();
         }
       }
-      return 0;
+      _idMaps['krediler']!.remove(id);
+      return 1;
     } catch (e) {
       print('deleteKredi error: $e');
       return 0;
@@ -334,7 +364,7 @@ class DatabaseService {
         return doc.data()['kredi_db_id'] == krediDbId;
       }).map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('kredi_taksitleri', doc.id);
         return KrediTaksit.fromMap(data);
       }).toList()..sort((a, b) => a.periyot.compareTo(b.periyot));
     } catch (e) {
@@ -345,13 +375,13 @@ class DatabaseService {
 
   Future<void> taksitOde(int taksitId, DateTime odemeTarihi) async {
     try {
-      final snapshot = await _db.collection('kredi_taksitleri').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == taksitId) {
-          await doc.reference.update({'odendi': true, 'odeme_tarihi': odemeTarihi.toIso8601String()});
-          return;
-        }
-      }
+      final docId = _getDocId('kredi_taksitleri', taksitId);
+      if (docId == null) return;
+      
+      await _db.collection('kredi_taksitleri').doc(docId).update({
+        'odendi': true, 
+        'odeme_tarihi': odemeTarihi.toIso8601String()
+      });
     } catch (e) {
       print('taksitOde error: $e');
     }
@@ -385,7 +415,7 @@ class DatabaseService {
   Future<int> insertSetting(AppSettings s) async {
     try {
       final docRef = await _db.collection('settings').add(s.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('settings', docRef.id);
     } catch (e) {
       print('insertSetting error: $e');
       return -1;
@@ -397,7 +427,7 @@ class DatabaseService {
       final snapshot = await _db.collection('settings').get();
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('settings', doc.id);
         return AppSettings.fromMap(data);
       }).where((s) => s.tip == tip && s.aktif).toList();
     } catch (e) {
@@ -409,28 +439,20 @@ class DatabaseService {
   Future<List<String>> getSettingValues(String tip) async {
     try {
       final settings = await getSettings(tip);
-      if (settings.isEmpty && tip == 'kasa') {
-        return ['Mert Anter', 'Necati Özdere', 'NEV Seracılık', 'AveA Sağlık'];
-      }
+      // Eğer ayarlardan kasa tanımlanmamışsa boş liste döndür
       return settings.map((s) => s.deger).toList();
     } catch (e) {
-      if (tip == 'kasa') {
-        return ['Mert Anter', 'Necati Özdere', 'NEV Seracılık', 'AveA Sağlık'];
-      }
       return [];
     }
   }
 
   Future<int> updateSetting(AppSettings s) async {
     try {
-      final snapshot = await _db.collection('settings').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == s.id) {
-          await doc.reference.update(s.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('settings', s.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('settings').doc(docId).update(s.toMap());
+      return 1;
     } catch (e) {
       print('updateSetting error: $e');
       return 0;
@@ -439,14 +461,11 @@ class DatabaseService {
 
   Future<int> deleteSetting(int id) async {
     try {
-      final snapshot = await _db.collection('settings').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.update({'aktif': false});
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('settings', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('settings').doc(docId).update({'aktif': false});
+      return 1;
     } catch (e) {
       print('deleteSetting error: $e');
       return 0;
@@ -457,7 +476,7 @@ class DatabaseService {
   Future<int> insertOrtak(Ortak o) async {
     try {
       final docRef = await _db.collection('ortaklar').add(o.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('ortaklar', docRef.id);
     } catch (e) {
       print('insertOrtak error: $e');
       return -1;
@@ -467,10 +486,36 @@ class DatabaseService {
   Future<List<Ortak>> getOrtaklar() async {
     try {
       final snapshot = await _db.collection('ortaklar').get();
+      final hareketler = await getKasaHareketleri();
+      
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
-        return Ortak.fromMap(data);
+        final ortakId = _getIntId('ortaklar', doc.id);
+        data['id'] = ortakId;
+        
+        // Bu ortağın işlemlerini hesapla
+        double toplamVerilen = 0;
+        double toplamGeriOdenen = 0;
+        double toplamStopaj = 0;
+        
+        for (var h in hareketler) {
+          if (h.iliskiliId == ortakId) {
+            final tutar = h.tlKarsiligi ?? h.tutar;
+            if (h.islemKaynagi == 'ortak_avans') {
+              toplamVerilen += tutar;
+            } else if (h.islemKaynagi == 'ortak_geri_odeme') {
+              toplamGeriOdenen += tutar;
+            } else if (h.islemKaynagi == 'ortak_stopaj') {
+              toplamStopaj += tutar;
+            }
+          }
+        }
+        
+        return Ortak.fromMap(data).copyWith(
+          toplamVerilen: toplamVerilen,
+          toplamGeriOdenen: toplamGeriOdenen,
+          toplamStopaj: toplamStopaj,
+        );
       }).where((o) => o.aktif).toList();
     } catch (e) {
       print('getOrtaklar error: $e');
@@ -508,14 +553,11 @@ class DatabaseService {
 
   Future<int> updateOrtak(Ortak o) async {
     try {
-      final snapshot = await _db.collection('ortaklar').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == o.id) {
-          await doc.reference.update(o.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('ortaklar', o.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('ortaklar').doc(docId).update(o.toMap());
+      return 1;
     } catch (e) {
       print('updateOrtak error: $e');
       return 0;
@@ -524,14 +566,11 @@ class DatabaseService {
 
   Future<int> deleteOrtak(int id) async {
     try {
-      final snapshot = await _db.collection('ortaklar').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.update({'aktif': false});
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('ortaklar', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('ortaklar').doc(docId).update({'aktif': false});
+      return 1;
     } catch (e) {
       print('deleteOrtak error: $e');
       return 0;
@@ -540,10 +579,41 @@ class DatabaseService {
 
   Future<Map<String, double>> getOrtakOzet() async {
     try {
-      final ortaklar = await getOrtaklar();
-      return {'toplamOrtak': ortaklar.length.toDouble()};
+      final hareketler = await getKasaHareketleri();
+      
+      double toplamVerilen = 0;
+      double toplamGeriOdenen = 0;
+      double toplamStopaj = 0;
+      
+      for (var h in hareketler) {
+        final tutar = h.tlKarsiligi ?? h.tutar;
+        if (h.islemKaynagi == 'ortak_avans') {
+          // Ortağın şirket için yaptığı harcama (şirketin ortağa borcu)
+          toplamVerilen += tutar;
+        } else if (h.islemKaynagi == 'ortak_geri_odeme') {
+          // Şirketin ortağa geri ödemesi
+          toplamGeriOdenen += tutar;
+        } else if (h.islemKaynagi == 'ortak_stopaj') {
+          // Kesilen stopaj
+          toplamStopaj += tutar;
+        }
+      }
+      
+      final kalanBorc = toplamVerilen - toplamGeriOdenen - toplamStopaj;
+      
+      return {
+        'toplam_verilen': toplamVerilen,
+        'toplam_geri_odenen': toplamGeriOdenen,
+        'toplam_stopaj': toplamStopaj,
+        'kalan_borc': kalanBorc,
+      };
     } catch (e) {
-      return {'toplamOrtak': 0};
+      return {
+        'toplam_verilen': 0,
+        'toplam_geri_odenen': 0,
+        'toplam_stopaj': 0,
+        'kalan_borc': 0,
+      };
     }
   }
 
@@ -591,7 +661,7 @@ class DatabaseService {
   Future<int> insertYaklasanOdeme(YaklasanOdeme o) async {
     try {
       final docRef = await _db.collection('yaklasan_odemeler').add(o.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('yaklasan_odemeler', docRef.id);
     } catch (e) {
       print('insertYaklasanOdeme error: $e');
       return -1;
@@ -603,7 +673,7 @@ class DatabaseService {
       final snapshot = await _db.collection('yaklasan_odemeler').get();
       List<YaklasanOdeme> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('yaklasan_odemeler', doc.id);
         return YaklasanOdeme.fromMap(data);
       }).toList();
       
@@ -631,14 +701,11 @@ class DatabaseService {
 
   Future<int> updateYaklasanOdeme(YaklasanOdeme o) async {
     try {
-      final snapshot = await _db.collection('yaklasan_odemeler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == o.id) {
-          await doc.reference.update(o.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('yaklasan_odemeler', o.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('yaklasan_odemeler').doc(docId).update(o.toMap());
+      return 1;
     } catch (e) {
       print('updateYaklasanOdeme error: $e');
       return 0;
@@ -647,14 +714,12 @@ class DatabaseService {
 
   Future<int> deleteYaklasanOdeme(int id) async {
     try {
-      final snapshot = await _db.collection('yaklasan_odemeler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.delete();
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('yaklasan_odemeler', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('yaklasan_odemeler').doc(docId).delete();
+      _idMaps['yaklasan_odemeler']!.remove(id);
+      return 1;
     } catch (e) {
       print('deleteYaklasanOdeme error: $e');
       return 0;
@@ -663,17 +728,14 @@ class DatabaseService {
 
   Future<int> odemeyiKapat(int id) async {
     try {
-      final snapshot = await _db.collection('yaklasan_odemeler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.update({
-            'odendi': true,
-            'odenme_tarihi': DateTime.now().toIso8601String(),
-          });
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('yaklasan_odemeler', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('yaklasan_odemeler').doc(docId).update({
+        'odendi': true,
+        'odenme_tarihi': DateTime.now().toIso8601String(),
+      });
+      return 1;
     } catch (e) {
       print('odemeyiKapat error: $e');
       return 0;
@@ -684,7 +746,7 @@ class DatabaseService {
   Future<int> insertMusteri(Musteri m) async {
     try {
       final docRef = await _db.collection('musteriler').add(m.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('musteriler', docRef.id);
     } catch (e) {
       print('insertMusteri error: $e');
       return -1;
@@ -696,7 +758,7 @@ class DatabaseService {
       final snapshot = await _db.collection('musteriler').get();
       List<Musteri> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('musteriler', doc.id);
         return Musteri.fromMap(data);
       }).toList();
       
@@ -721,14 +783,11 @@ class DatabaseService {
 
   Future<int> updateMusteri(Musteri m) async {
     try {
-      final snapshot = await _db.collection('musteriler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == m.id) {
-          await doc.reference.update(m.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('musteriler', m.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('musteriler').doc(docId).update(m.toMap());
+      return 1;
     } catch (e) {
       print('updateMusteri error: $e');
       return 0;
@@ -737,14 +796,11 @@ class DatabaseService {
 
   Future<int> deleteMusteri(int id) async {
     try {
-      final snapshot = await _db.collection('musteriler').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.update({'aktif': false});
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('musteriler', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('musteriler').doc(docId).update({'aktif': false});
+      return 1;
     } catch (e) {
       print('deleteMusteri error: $e');
       return 0;
@@ -793,7 +849,7 @@ class DatabaseService {
   Future<int> insertSatis(Satis s) async {
     try {
       final docRef = await _db.collection('satislar').add(s.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('satislar', docRef.id);
     } catch (e) {
       print('insertSatis error: $e');
       return -1;
@@ -805,7 +861,7 @@ class DatabaseService {
       final snapshot = await _db.collection('satislar').get();
       List<Satis> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('satislar', doc.id);
         return Satis.fromMap(data);
       }).toList();
       
@@ -837,14 +893,11 @@ class DatabaseService {
 
   Future<int> updateSatis(Satis s) async {
     try {
-      final snapshot = await _db.collection('satislar').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == s.id) {
-          await doc.reference.update(s.toMap());
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('satislar', s.id!);
+      if (docId == null) return 0;
+      
+      await _db.collection('satislar').doc(docId).update(s.toMap());
+      return 1;
     } catch (e) {
       print('updateSatis error: $e');
       return 0;
@@ -853,14 +906,12 @@ class DatabaseService {
 
   Future<int> deleteSatis(int id) async {
     try {
-      final snapshot = await _db.collection('satislar').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.delete();
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('satislar', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('satislar').doc(docId).delete();
+      _idMaps['satislar']!.remove(id);
+      return 1;
     } catch (e) {
       print('deleteSatis error: $e');
       return 0;
@@ -870,8 +921,24 @@ class DatabaseService {
   Future<Map<String, dynamic>> getCariOzet() async {
     try {
       final musteriler = await getMusteriler();
-      double toplamAlacak = 0;
+      final satislar = await getSatislar();
+      final tahsilatlar = await getTahsilatlar();
       
+      double toplamAlacak = 0;
+      double toplamSatis = 0;
+      double toplamTahsilat = 0;
+      
+      // Satış toplamı
+      for (var s in satislar) {
+        toplamSatis += s.toplamTutar;
+      }
+      
+      // Tahsilat toplamı
+      for (var t in tahsilatlar) {
+        toplamTahsilat += (t['tutar'] as num?)?.toDouble() ?? 0;
+      }
+      
+      // Müşteri bazlı alacak toplamı
       for (var m in musteriler) {
         final bakiye = await getMusteriBakiye(m.id!);
         if (bakiye['bakiye']! > 0) {
@@ -884,9 +951,19 @@ class DatabaseService {
         'toplamBorc': 0.0,
         'netBakiye': toplamAlacak,
         'musteriSayisi': musteriler.length,
+        'toplamSatis': toplamSatis,
+        'toplamTahsilat': toplamTahsilat,
       };
     } catch (e) {
-      return {'toplamAlacak': 0.0, 'toplamBorc': 0.0, 'netBakiye': 0.0, 'musteriSayisi': 0};
+      print('getCariOzet error: $e');
+      return {
+        'toplamAlacak': 0.0, 
+        'toplamBorc': 0.0, 
+        'netBakiye': 0.0, 
+        'musteriSayisi': 0,
+        'toplamSatis': 0.0,
+        'toplamTahsilat': 0.0,
+      };
     }
   }
 
@@ -894,7 +971,7 @@ class DatabaseService {
   Future<int> insertTahsilat(Map<String, dynamic> t) async {
     try {
       final docRef = await _db.collection('tahsilatlar').add(t);
-      return docRef.id.hashCode.abs();
+      return _getIntId('tahsilatlar', docRef.id);
     } catch (e) {
       print('insertTahsilat error: $e');
       return -1;
@@ -904,9 +981,15 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getTahsilatlar({int? musteriId, int? satisId}) async {
     try {
       final snapshot = await _db.collection('tahsilatlar').get();
+      final musteriler = await getMusteriler(sadecAktif: false);
+      
       List<Map<String, dynamic>> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = doc.id.hashCode.abs();
+        data['id'] = _getIntId('tahsilatlar', doc.id);
+        // Müşteri unvanını ekle
+        final mId = data['musteri_id'];
+        final musteri = musteriler.where((m) => m.id == mId).firstOrNull;
+        data['musteri_unvan'] = musteri?.unvan ?? 'Bilinmeyen';
         return data;
       }).toList();
       
@@ -916,6 +999,14 @@ class DatabaseService {
       if (satisId != null) {
         list = list.where((t) => t['satis_id'] == satisId).toList();
       }
+      
+      // Tarihe göre sırala (yeniden eskiye)
+      list.sort((a, b) {
+        final dateA = DateTime.tryParse(a['tarih'] ?? '') ?? DateTime(2000);
+        final dateB = DateTime.tryParse(b['tarih'] ?? '') ?? DateTime(2000);
+        return dateB.compareTo(dateA);
+      });
+      
       return list;
     } catch (e) {
       print('getTahsilatlar error: $e');
@@ -925,16 +1016,27 @@ class DatabaseService {
 
   Future<int> deleteTahsilat(int id) async {
     try {
-      final snapshot = await _db.collection('tahsilatlar').get();
-      for (var doc in snapshot.docs) {
-        if (doc.id.hashCode.abs() == id) {
-          await doc.reference.delete();
-          return 1;
-        }
-      }
-      return 0;
+      final docId = _getDocId('tahsilatlar', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('tahsilatlar').doc(docId).delete();
+      _idMaps['tahsilatlar']!.remove(id);
+      return 1;
     } catch (e) {
       print('deleteTahsilat error: $e');
+      return 0;
+    }
+  }
+
+  Future<int> updateTahsilat(int id, Map<String, dynamic> t) async {
+    try {
+      final docId = _getDocId('tahsilatlar', id);
+      if (docId == null) return 0;
+      
+      await _db.collection('tahsilatlar').doc(docId).update(t);
+      return 1;
+    } catch (e) {
+      print('updateTahsilat error: $e');
       return 0;
     }
   }

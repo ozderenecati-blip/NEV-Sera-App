@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/kredi.dart';
+import '../widgets/ux_components.dart';
 
 class KrediScreen extends StatelessWidget {
   const KrediScreen({super.key});
@@ -18,7 +19,7 @@ class KrediScreen extends StatelessWidget {
       body: Consumer<AppProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const SkeletonListView(itemCount: 4);
           }
           
           return Column(
@@ -63,33 +64,40 @@ class KrediScreen extends StatelessWidget {
               
               Expanded(
                 child: provider.krediler.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.credit_card_off, size: 64, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text('Henüz kredi yok', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                          ],
-                        ),
+                    ? EmptyStateWidget(
+                        icon: Icons.credit_card_off,
+                        title: 'Henüz kredi yok',
+                        subtitle: 'Kredi ekleyerek takip etmeye başlayın',
+                        buttonText: 'Kredi Ekle',
+                        onButtonPressed: () => _showAddKrediDialog(context),
+                        iconColor: Colors.blue,
                       )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: provider.krediler.length,
-                        itemBuilder: (context, index) {
-                          final kredi = provider.krediler[index];
-                          return _buildKrediCard(context, kredi, currencyFormat);
-                        },
+                    : RefreshableList(
+                        onRefresh: () => provider.loadAllData(),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: provider.krediler.length,
+                          itemBuilder: (context, index) {
+                            final kredi = provider.krediler[index];
+                            return AnimatedListItem(
+                              index: index,
+                              child: _buildKrediCard(context, kredi, currencyFormat),
+                            );
+                          },
+                        ),
                       ),
               ),
             ],
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddKrediDialog(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Yeni Kredi'),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80),
+        child: FloatingActionButton.extended(
+          onPressed: () => _showAddKrediDialog(context),
+          icon: const Icon(Icons.add),
+          label: const Text('Yeni Kredi'),
+        ),
       ),
     );
   }
@@ -166,7 +174,7 @@ class KrediScreen extends StatelessWidget {
                 children: [
                   _buildInfoChip('Kasa', kredi.kasa ?? '-'),
                   _buildInfoChip('Ödeme', '${kredi.odemeSikligiAy} Ayda 1'),
-                  _buildInfoChip('Para Birimi', kredi.paraBirimi ?? 'TL'),
+                  _buildInfoChip('Para Birimi', kredi.paraBirimi),
                 ],
               ),
             ],

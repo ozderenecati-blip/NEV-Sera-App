@@ -167,7 +167,7 @@ class KrediTaksit {
       kkdf: (map['kkdf'] ?? 0).toDouble(),
       toplamTaksit: (map['toplam_taksit'] ?? 0).toDouble(),
       kalanBakiye: (map['kalan_bakiye'] ?? 0).toDouble(),
-      odendi: map['odendi'] == 1,
+      odendi: map['odendi'] == 1 || map['odendi'] == true,
     );
   }
 }

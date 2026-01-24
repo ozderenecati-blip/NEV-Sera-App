@@ -58,7 +58,7 @@ class Ortak {
       telefon: map['telefon'],
       adres: map['adres'],
       stopajOrani: (map['stopaj_orani'] ?? 15.0).toDouble(),
-      aktif: map['aktif'] == 1,
+      aktif: map['aktif'] == 1 || map['aktif'] == true,
       notlar: map['notlar'],
       createdAt: map['created_at'] != null 
           ? DateTime.parse(map['created_at']) 

@@ -3,12 +3,14 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
 import '../providers/app_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/kasa_hareketi.dart';
 import '../models/kredi.dart';
 import '../services/currency_service.dart';
 import '../services/excel_service.dart';
+import '../services/fis_storage_service.dart';
 import '../widgets/modern_widgets.dart';
 
 class KasaScreen extends StatefulWidget {
@@ -216,10 +218,13 @@ class _KasaScreenState extends State<KasaScreen> {
           ),
         ],
       ),
-      floatingActionButton: AnimatedFAB(
-        onPressed: () => _showAddEditDialog(context),
-        icon: Icons.add,
-        label: 'Yeni İşlem',
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80),
+        child: AnimatedFAB(
+          onPressed: () => _showAddEditDialog(context),
+          icon: Icons.add,
+          label: 'Yeni İşlem',
+        ),
       ),
       body: Consumer<AppProvider>(
         builder: (context, provider, child) {
@@ -552,7 +557,7 @@ class _KasaScreenState extends State<KasaScreen> {
       child: Card(
         margin: const EdgeInsets.only(bottom: 8),
         child: InkWell(
-          onTap: () => _showAddEditDialog(context, hareket: h),
+          onTap: () => _showIslemDetay(context, h),
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -701,6 +706,437 @@ class _KasaScreenState extends State<KasaScreen> {
     'islem_ucreti' => Colors.brown,
     _ => Colors.grey,
   };
+
+  /// İşlem detay bottom sheet - fiş ekleme özelliği burada
+  void _showIslemDetay(BuildContext context, KasaHareketi hareket) {
+    final provider = Provider.of<AppProvider>(context, listen: false);
+    final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+    final dateFormat = DateFormat('dd MMMM yyyy, HH:mm', 'tr_TR');
+    final isGiris = hareket.islemTipi == 'Giriş';
+    final color = isGiris ? Colors.green : Colors.red;
+    final fisService = FisStorageService();
+    final picker = ImagePicker();
+    
+    String? currentFisUrl = hareket.fisUrl;
+    bool isUploading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          height: MediaQuery.of(ctx).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isGiris ? Icons.arrow_downward : Icons.arrow_upward,
+                        color: color,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hareket.aciklama,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            hareket.islemKaynagiLabel,
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const Divider(height: 1),
+              
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Tutar
+                      _buildDetayRow(
+                        'Tutar',
+                        '${isGiris ? '+' : '-'}${hareket.paraBirimiSembol}${hareket.tutar.toStringAsFixed(2)}',
+                        color: color,
+                        isBold: true,
+                        fontSize: 24,
+                      ),
+                      
+                      if (hareket.tlKarsiligi != null && hareket.paraBirimi != 'TL')
+                        _buildDetayRow(
+                          'TL Karşılığı',
+                          currencyFormat.format(hareket.tlKarsiligi),
+                          color: Colors.grey.shade700,
+                        ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildDetayRow('Tarih', dateFormat.format(hareket.tarih)),
+                      _buildDetayRow('Kasa', hareket.kasa ?? '-'),
+                      _buildDetayRow('Ödeme Şekli', hareket.odemeBicimi ?? '-'),
+                      
+                      if (hareket.notlar != null && hareket.notlar!.isNotEmpty)
+                        _buildDetayRow('Notlar', hareket.notlar!),
+                      
+                      const SizedBox(height: 24),
+                      
+                      // Fiş Görseli Bölümü
+                      const Text(
+                        'Fiş / Fatura Görseli',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 12),
+                      
+                      if (isUploading)
+                        Container(
+                          height: 150,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 8),
+                                Text('Yükleniyor...'),
+                              ],
+                            ),
+                          ),
+                        )
+                      else if (currentFisUrl != null)
+                        GestureDetector(
+                          onTap: () => _showFullImage(ctx, currentFisUrl!),
+                          child: Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(currentFisUrl!, fit: BoxFit.cover),
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Row(
+                                      children: [
+                                        _buildFisActionButton(
+                                          Icons.fullscreen,
+                                          'Büyüt',
+                                          () => _showFullImage(ctx, currentFisUrl!),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        _buildFisActionButton(
+                                          Icons.delete,
+                                          'Kaldır',
+                                          () async {
+                                            setModalState(() => isUploading = true);
+                                            // URL'yi kaldır
+                                            final updated = hareket.copyWith(fisUrl: null);
+                                            await provider.updateKasaHareketi(updated);
+                                            setModalState(() {
+                                              currentFisUrl = null;
+                                              isUploading = false;
+                                            });
+                                          },
+                                          isDestructive: true,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        )
+                      else
+                        GestureDetector(
+                          onTap: () => _showFisEkleMenu(ctx, picker, fisService, hareket, provider, (url) {
+                            setModalState(() {
+                              currentFisUrl = url;
+                            });
+                          }, (loading) {
+                            setModalState(() => isUploading = loading);
+                          }),
+                          child: Container(
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey.shade500),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Fiş / Fatura Ekle',
+                                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Kamera veya galeriden seçin',
+                                    style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Bottom actions
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).scaffoldBackgroundColor,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddEditDialog(context, hareket: hareket);
+                        },
+                        icon: const Icon(Icons.edit),
+                        label: const Text('Düzenle'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.pop(ctx),
+                        icon: const Icon(Icons.check),
+                        label: const Text('Tamam'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetayRow(String label, String value, {Color? color, bool isBold = false, double fontSize = 14}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+                fontSize: fontSize,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFisActionButton(IconData icon, String tooltip, VoidCallback onTap, {bool isDestructive = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDestructive ? Colors.red : Colors.black54,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 4),
+            Text(tooltip, style: const TextStyle(color: Colors.white, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                child: Image.network(url),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 32),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showFisEkleMenu(
+    BuildContext context,
+    ImagePicker picker,
+    FisStorageService fisService,
+    KasaHareketi hareket,
+    AppProvider provider,
+    Function(String?) onUrlChanged,
+    Function(bool) onLoadingChanged,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Kamera ile Çek'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadFis(ImageSource.camera, picker, fisService, hareket, provider, onUrlChanged, onLoadingChanged);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Galeriden Seç'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _pickAndUploadFis(ImageSource.gallery, picker, fisService, hareket, provider, onUrlChanged, onLoadingChanged);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadFis(
+    ImageSource source,
+    ImagePicker picker,
+    FisStorageService fisService,
+    KasaHareketi hareket,
+    AppProvider provider,
+    Function(String?) onUrlChanged,
+    Function(bool) onLoadingChanged,
+  ) async {
+    try {
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1600,
+        imageQuality: 80,
+      );
+      
+      if (image == null) return;
+      
+      onLoadingChanged(true);
+      
+      final bytes = await image.readAsBytes();
+      final url = await fisService.uploadFisGorseli(bytes, fileName: image.name);
+      
+      if (url != null) {
+        // Hareketi güncelle
+        final updated = hareket.copyWith(fisUrl: url);
+        await provider.updateKasaHareketi(updated);
+        onUrlChanged(url);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fiş yüklenemedi')),
+          );
+        }
+      }
+      
+      onLoadingChanged(false);
+    } catch (e) {
+      onLoadingChanged(false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hata: $e')),
+        );
+      }
+    }
+  }
 
   void _showAddEditDialog(BuildContext context, {KasaHareketi? hareket}) {
     final provider = Provider.of<AppProvider>(context, listen: false);
@@ -1235,64 +1671,86 @@ class _KasaScreenState extends State<KasaScreen> {
 
                             // Transfer modu için kasalar
                             if (islemModu == 'transfer') ...[
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: selectedKasa,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Kaynak Kasa *',
-                                        border: OutlineInputBorder(),
+                              if (provider.kasalar.length < 2)
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade300),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Text(
+                                          'Transfer için en az 2 kasa tanımlanmalıdır. Ayarlar > Kasa bölümünden ekleyin.',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
                                       ),
-                                      items:
-                                          provider.kasalar
-                                              .map(
-                                                (k) => DropdownMenuItem(
-                                                  value: k,
-                                                  child: Text(k),
-                                                ),
-                                              )
-                                              .toList(),
-                                      onChanged:
-                                          (v) => setModalState(
-                                            () => selectedKasa = v,
-                                          ),
-                                    ),
+                                    ],
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    child: Icon(
-                                      Icons.arrow_forward,
-                                      color: Colors.purple,
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue: hedefKasa,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Hedef Kasa *',
-                                        border: OutlineInputBorder(),
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: selectedKasa,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Kaynak Kasa *',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items:
+                                            provider.kasalar
+                                                .map(
+                                                  (k) => DropdownMenuItem(
+                                                    value: k,
+                                                    child: Text(k),
+                                                  ),
+                                                )
+                                                .toList(),
+                                        onChanged:
+                                            (v) => setModalState(
+                                              () => selectedKasa = v,
+                                            ),
                                       ),
-                                      items:
-                                          provider.kasalar
-                                              .where((k) => k != selectedKasa)
-                                              .map(
-                                                (k) => DropdownMenuItem(
-                                                  value: k,
-                                                  child: Text(k),
-                                                ),
-                                              )
-                                              .toList(),
-                                      onChanged:
-                                          (v) => setModalState(
-                                            () => hedefKasa = v,
-                                          ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                      child: Icon(
+                                        Icons.arrow_forward,
+                                        color: Colors.purple,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: hedefKasa,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Hedef Kasa *',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                        items:
+                                            provider.kasalar
+                                                .where((k) => k != selectedKasa)
+                                                .map(
+                                                  (k) => DropdownMenuItem(
+                                                    value: k,
+                                                    child: Text(k),
+                                                  ),
+                                                )
+                                                .toList(),
+                                        onChanged:
+                                            (v) => setModalState(
+                                              () => hedefKasa = v,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               const SizedBox(height: 16),
                             ],
 
@@ -1522,28 +1980,49 @@ class _KasaScreenState extends State<KasaScreen> {
 
                             // Normal modlarda kasa seçimi (transfer hariç)
                             if (islemModu != 'transfer')
-                              DropdownButtonFormField<String>(
-                                initialValue: selectedKasa,
-                                decoration: const InputDecoration(
-                                  labelText: 'Kasa *',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(
-                                    Icons.account_balance_wallet,
-                                  ),
-                                ),
-                                items:
-                                    provider.kasalar
-                                        .map(
-                                          (k) => DropdownMenuItem(
-                                            value: k,
-                                            child: Text(k),
+                              provider.kasalar.isEmpty
+                                  ? Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.orange.shade300),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                                          const SizedBox(width: 8),
+                                          const Expanded(
+                                            child: Text(
+                                              'Lütfen önce Ayarlar > Kasa bölümünden kasa tanımlayın.',
+                                              style: TextStyle(fontSize: 13),
+                                            ),
                                           ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) =>
-                                        setModalState(() => selectedKasa = v),
-                              ),
+                                        ],
+                                      ),
+                                    )
+                                  : DropdownButtonFormField<String>(
+                                      value: selectedKasa,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Kasa *',
+                                        border: OutlineInputBorder(),
+                                        prefixIcon: Icon(
+                                          Icons.account_balance_wallet,
+                                        ),
+                                      ),
+                                      items:
+                                          provider.kasalar
+                                              .map(
+                                                (k) => DropdownMenuItem(
+                                                  value: k,
+                                                  child: Text(k),
+                                                ),
+                                              )
+                                              .toList(),
+                                      onChanged:
+                                          (v) =>
+                                              setModalState(() => selectedKasa = v),
+                                    ),
 
                             const SizedBox(height: 16),
 
@@ -1766,6 +2245,13 @@ class _KasaScreenState extends State<KasaScreen> {
       ScaffoldMessenger.of(
         ctx,
       ).showSnackBar(const SnackBar(content: Text('Açıklama girin')));
+      return;
+    }
+    // Kasa boşsa engelle (transfer hariç diğer modlar için)
+    if (islemModu != 'transfer' && selectedKasa == null) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(content: Text('Lütfen önce Ayarlar bölümünden kasa tanımlayın')),
+      );
       return;
     }
     if (islemModu == 'transfer') {

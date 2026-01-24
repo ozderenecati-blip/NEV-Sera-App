@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/app_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/settings.dart';
-import '../models/ortak.dart';
 import 'raporlar_screen.dart';
 import 'login_screen.dart';
 

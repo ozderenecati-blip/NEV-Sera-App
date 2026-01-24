@@ -47,9 +47,9 @@ class YaklasanOdeme {
       paraBirimi: map['para_birimi'] ?? 'TL',
       vadeTarihi: DateTime.parse(map['vade_tarihi']),
       aciklama: map['aciklama'],
-      odendi: map['odendi'] == 1,
+      odendi: map['odendi'] == 1 || map['odendi'] == true,
       odenmeTarihi: map['odenme_tarihi'] != null ? DateTime.parse(map['odenme_tarihi']) : null,
-      alarmAktif: map['alarm_aktif'] == 1,
+      alarmAktif: map['alarm_aktif'] == 1 || map['alarm_aktif'] == true,
       alarmGunOnce: map['alarm_gun_once'],
     );
   }

@@ -871,7 +871,7 @@ class AppProvider extends ChangeNotifier {
         final kasaHareketi = KasaHareketi(
           tarih: tarih,
           aciklama: '${musteri.unvan} - Tahsilat',
-          islemTipi: 'Gelir',
+          islemTipi: 'Giriş',
           tutar: tutar,
           odemeBicimi: odemeSekli,
           kasa: kasaAdi,
@@ -905,6 +905,17 @@ class AppProvider extends ChangeNotifier {
       await loadSatislar();
     } catch (e) {
       _error = 'Tahsilat silinirken hata: $e';
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateTahsilat(int id, Map<String, dynamic> data) async {
+    try {
+      await _db.updateTahsilat(id, data);
+      await loadMusteriler();
+      await loadSatislar();
+    } catch (e) {
+      _error = 'Tahsilat güncellenirken hata: $e';
       notifyListeners();
     }
   }

@@ -43,7 +43,7 @@ class Gundelikci {
       tcNo: map['tc_no'],
       adres: map['adres'],
       telefon: map['telefon'],
-      aktif: (map['aktif'] ?? 1) == 1,
+      aktif: (map['aktif'] ?? 1) == 1 || map['aktif'] == true,
     );
   }
   

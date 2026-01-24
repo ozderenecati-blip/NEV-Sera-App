@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 import '../providers/app_provider.dart';
+import '../models/kasa_hareketi.dart';
 
 class VergiRaporScreen extends StatefulWidget {
   const VergiRaporScreen({super.key});
@@ -579,6 +585,49 @@ class _VergiRaporScreenState extends State<VergiRaporScreen> with SingleTickerPr
               ),
             ),
           ),
+          
+          const SizedBox(height: 12),
+          
+          // Fiş Beyannamesi
+          Card(
+            child: InkWell(
+              onTap: () => _showFisBeyannamesiDialog(provider),
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade100,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.receipt, color: Colors.teal.shade700, size: 32),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Fiş Beyannamesi (PDF)',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Fişli işlemlerin PDF dökümanı',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.picture_as_pdf, color: Colors.teal),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -782,5 +831,379 @@ class _VergiRaporScreenState extends State<VergiRaporScreen> with SingleTickerPr
     rapor.writeln('Kalan Borç: ${_currencyFormat.format(krediOzet['kalanBorc'] ?? 0)}');
     
     Share.share(rapor.toString(), subject: 'Muhasebeci Özet - ${_getAyAdi(_selectedMonth)} $_selectedYear');
+  }
+
+  void _showFisBeyannamesiDialog(AppProvider provider) {
+    DateTime baslangicTarihi = DateTime(_selectedYear, _selectedMonth, 1);
+    DateTime bitisTarihi = DateTime(_selectedYear, _selectedMonth + 1, 0);
+    
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.receipt, color: Colors.teal),
+              SizedBox(width: 8),
+              Text('Fiş Beyannamesi'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tarih aralığı seçin:',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 16),
+                // Başlangıç Tarihi
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: baslangicTarihi,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => baslangicTarihi = picked);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Başlangıç: ${DateFormat('dd.MM.yyyy').format(baslangicTarihi)}'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Bitiş Tarihi
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: ctx,
+                      initialDate: bitisTarihi,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => bitisTarihi = picked);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 20),
+                        const SizedBox(width: 8),
+                        Text('Bitiş: ${DateFormat('dd.MM.yyyy').format(bitisTarihi)}'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Seçili tarih aralığında fiş eklenmiş tüm işlemler PDF olarak oluşturulacak.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('İptal'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _generateFisBeyannamesiPDF(provider, baslangicTarihi, bitisTarihi);
+              },
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text('PDF Oluştur'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _generateFisBeyannamesiPDF(AppProvider provider, DateTime baslangic, DateTime bitis) async {
+    // Fiş eklenmiş işlemleri filtrele
+    final fisliIslemler = provider.kasaHareketleri.where((h) {
+      return h.fisUrl != null && 
+             h.fisUrl!.isNotEmpty &&
+             h.tarih.isAfter(baslangic.subtract(const Duration(days: 1))) &&
+             h.tarih.isBefore(bitis.add(const Duration(days: 1)));
+    }).toList();
+    
+    if (fisliIslemler.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Seçili tarih aralığında fişli işlem bulunamadı.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(width: 16),
+              Text('PDF oluşturuluyor... (${fisliIslemler.length} işlem)'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    try {
+      final pdf = pw.Document();
+      
+      // Fiş resimlerini indir
+      final List<Map<String, dynamic>> islemlerWithImages = [];
+      
+      for (var islem in fisliIslemler) {
+        Uint8List? imageBytes;
+        try {
+          final response = await http.get(Uri.parse(islem.fisUrl!));
+          if (response.statusCode == 200) {
+            imageBytes = response.bodyBytes;
+          }
+        } catch (e) {
+          debugPrint('Fiş indirme hatası: $e');
+        }
+        
+        islemlerWithImages.add({
+          'islem': islem,
+          'image': imageBytes,
+        });
+      }
+
+      // Kapak sayfası
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          build: (pw.Context context) {
+            return pw.Center(
+              child: pw.Column(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    'NEV SERACILIK',
+                    style: pw.TextStyle(fontSize: 32, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 20),
+                  pw.Text(
+                    'FİŞ BEYANNAMESİ',
+                    style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 40),
+                  pw.Text(
+                    'Tarih Aralığı',
+                    style: const pw.TextStyle(fontSize: 14),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    '${DateFormat('dd.MM.yyyy').format(baslangic)} - ${DateFormat('dd.MM.yyyy').format(bitis)}',
+                    style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 30),
+                  pw.Text(
+                    'Toplam İşlem Sayısı: ${fisliIslemler.length}',
+                    style: const pw.TextStyle(fontSize: 16),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Toplam Tutar: ${_currencyFormat.format(fisliIslemler.fold(0.0, (sum, h) => sum + h.tutar))}',
+                    style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 60),
+                  pw.Text(
+                    'Oluşturulma Tarihi: ${DateFormat('dd.MM.yyyy HH:mm').format(DateTime.now())}',
+                    style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+
+      // Her işlem için sayfa oluştur
+      for (var item in islemlerWithImages) {
+        final islem = item['islem'] as KasaHareketi;
+        final imageBytes = item['image'] as Uint8List?;
+        
+        pdf.addPage(
+          pw.Page(
+            pageFormat: PdfPageFormat.a4,
+            build: (pw.Context context) {
+              return pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  // İşlem Bilgileri Header
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(16),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColors.grey200,
+                      borderRadius: pw.BorderRadius.circular(8),
+                    ),
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                          children: [
+                            pw.Text(
+                              'İŞLEM DETAYI',
+                              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                            ),
+                            pw.Text(
+                              DateFormat('dd.MM.yyyy').format(islem.tarih),
+                              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 12),
+                        pw.Row(
+                          children: [
+                            pw.Expanded(
+                              child: pw.Column(
+                                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                children: [
+                                  pw.Text('İşlem Tipi:', style: const pw.TextStyle(fontSize: 10)),
+                                  pw.Text(
+                                    islem.islemTipi == 'giris' ? 'GİRİŞ' : 'ÇIKIŞ',
+                                    style: pw.TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: pw.FontWeight.bold,
+                                      color: islem.islemTipi == 'giris' ? PdfColors.green700 : PdfColors.red700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            pw.Expanded(
+                              child: pw.Column(
+                                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                children: [
+                                  pw.Text('Tutar:', style: const pw.TextStyle(fontSize: 10)),
+                                  pw.Text(
+                                    _currencyFormat.format(islem.tutar),
+                                    style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        pw.SizedBox(height: 8),
+                        pw.Text('Açıklama:', style: const pw.TextStyle(fontSize: 10)),
+                        pw.Text(
+                          islem.aciklama,
+                          style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                        ),
+                        if (islem.kasa != null && islem.kasa!.isNotEmpty) ...[
+                          pw.SizedBox(height: 8),
+                          pw.Text('Kasa:', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text(islem.kasa!, style: const pw.TextStyle(fontSize: 12)),
+                        ],
+                        if (islem.notlar != null && islem.notlar!.isNotEmpty) ...[
+                          pw.SizedBox(height: 8),
+                          pw.Text('Notlar:', style: const pw.TextStyle(fontSize: 10)),
+                          pw.Text(islem.notlar!, style: const pw.TextStyle(fontSize: 11)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  pw.SizedBox(height: 20),
+                  // Fiş Görseli
+                  pw.Text(
+                    'FİŞ GÖRSELİ',
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Divider(),
+                  pw.SizedBox(height: 10),
+                  if (imageBytes != null)
+                    pw.Expanded(
+                      child: pw.Center(
+                        child: pw.Image(
+                          pw.MemoryImage(imageBytes),
+                          fit: pw.BoxFit.contain,
+                        ),
+                      ),
+                    )
+                  else
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(20),
+                      decoration: pw.BoxDecoration(
+                        border: pw.Border.all(color: PdfColors.grey400),
+                        borderRadius: pw.BorderRadius.circular(8),
+                      ),
+                      child: pw.Text(
+                        'Fiş görseli yüklenemedi',
+                        style: pw.TextStyle(color: PdfColors.grey600),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+      }
+
+      // Loading dialog'u kapat
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      // PDF'i göster/paylaş
+      if (mounted) {
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => pdf.save(),
+          name: 'Fis_Beyannamesi_${DateFormat('yyyyMMdd').format(baslangic)}_${DateFormat('yyyyMMdd').format(bitis)}.pdf',
+        );
+      }
+
+    } catch (e) {
+      // Loading dialog'u kapat
+      if (mounted) {
+        Navigator.pop(context);
+      }
+      
+      debugPrint('PDF oluşturma hatası: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF oluşturulurken hata: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

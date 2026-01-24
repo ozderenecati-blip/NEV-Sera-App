@@ -35,7 +35,6 @@ class ExcelService {
     
     // Veriler
     final dateFormat = DateFormat('dd.MM.yyyy');
-    final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '');
     
     for (var i = 0; i < hareketler.length; i++) {
       final h = hareketler[i];

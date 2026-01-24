@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/musteri.dart';
 import '../models/satis.dart';
+import '../widgets/ux_components.dart';
 
 class MusterilerScreen extends StatefulWidget {
   const MusterilerScreen({super.key});
@@ -57,7 +58,7 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
       body: Consumer<AppProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const SkeletonListView(itemCount: 6);
           }
 
           return TabBarView(
@@ -70,10 +71,13 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: primaryColor,
-        onPressed: () => _showAddDialog(),
-        child: const Icon(Icons.add, color: Colors.white),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 80),
+        child: FloatingActionButton(
+          backgroundColor: primaryColor,
+          onPressed: () => _showAddDialog(),
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
       ),
     );
   }
@@ -115,23 +119,35 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
         // Müşteri Listesi
         Expanded(
           child: musteriler.isEmpty
-              ? _buildEmptyState('Henüz müşteri eklenmemiş', Icons.people_outline)
-              : ListView.builder(
-                  itemCount: musteriler.length,
-                  itemBuilder: (context, index) {
-                    return FutureBuilder<Map<String, double>>(
-                      future: provider.getMusteriBakiye(musteriler[index].id!),
-                      builder: (context, snapshot) {
-                        final bakiye = snapshot.data ?? {'bakiye': 0.0};
-                        return _buildMusteriCard(
-                          musteriler[index],
-                          bakiye['bakiye'] ?? 0,
-                          isDark,
-                          primaryColor,
-                        );
-                      },
-                    );
-                  },
+              ? EmptyStateWidget(
+                  icon: Icons.people_outline,
+                  title: 'Henüz müşteri eklenmemiş',
+                  subtitle: 'İlk müşterinizi ekleyerek başlayın',
+                  buttonText: 'Müşteri Ekle',
+                  onButtonPressed: () => _showMusteriEkleDialog(),
+                )
+              : RefreshableList(
+                  onRefresh: () => provider.loadMusteriler(),
+                  child: ListView.builder(
+                    itemCount: musteriler.length,
+                    itemBuilder: (context, index) {
+                      return FutureBuilder<Map<String, double>>(
+                        future: provider.getMusteriBakiye(musteriler[index].id!),
+                        builder: (context, snapshot) {
+                          final bakiye = snapshot.data ?? {'bakiye': 0.0};
+                          return AnimatedListItem(
+                            index: index,
+                            child: _buildMusteriCard(
+                              musteriler[index],
+                              bakiye['bakiye'] ?? 0,
+                              isDark,
+                              primaryColor,
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
@@ -175,12 +191,24 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
         // Satış Listesi
         Expanded(
           child: satislar.isEmpty
-              ? _buildEmptyState('Henüz satış kaydı yok', Icons.shopping_cart_outlined)
-              : ListView.builder(
-                  itemCount: satislar.length,
-                  itemBuilder: (context, index) {
-                    return _buildSatisCard(satislar[index], isDark, primaryColor);
-                  },
+              ? EmptyStateWidget(
+                  icon: Icons.shopping_cart_outlined,
+                  title: 'Henüz satış kaydı yok',
+                  subtitle: 'Yeni satış ekleyerek başlayın',
+                  buttonText: 'Satış Ekle',
+                  onButtonPressed: () => _showSatisEkleDialog(),
+                )
+              : RefreshableList(
+                  onRefresh: () => provider.loadSatislar(),
+                  child: ListView.builder(
+                    itemCount: satislar.length,
+                    itemBuilder: (context, index) {
+                      return AnimatedListItem(
+                        index: index,
+                        child: _buildSatisCard(satislar[index], isDark, primaryColor),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
@@ -192,41 +220,74 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
       future: provider.getTahsilatlar(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SkeletonListView(itemCount: 5);
         }
 
         final tahsilatlar = snapshot.data ?? [];
 
         if (tahsilatlar.isEmpty) {
-          return _buildEmptyState('Henüz tahsilat kaydı yok', Icons.account_balance_wallet_outlined);
+          return EmptyStateWidget(
+            icon: Icons.account_balance_wallet_outlined,
+            title: 'Henüz tahsilat kaydı yok',
+            subtitle: 'Müşterilerden tahsilat ekleyin',
+            buttonText: 'Tahsilat Ekle',
+            onButtonPressed: () => _showTahsilatEkleDialog(),
+            iconColor: Colors.green,
+          );
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: tahsilatlar.length,
-          itemBuilder: (context, index) {
-            final t = tahsilatlar[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.green.withValues(alpha: 0.2),
-                  child: const Icon(Icons.payments, color: Colors.green),
-                ),
-                title: Text(t['musteri_unvan'] ?? 'Bilinmeyen'),
-                subtitle: Text(
-                  DateFormat('dd.MM.yyyy').format(DateTime.parse(t['tarih'])),
-                ),
-                trailing: Text(
-                  _currencyFormat.format(t['tutar']),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+        return RefreshableList(
+          onRefresh: () async => setState(() {}),
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: tahsilatlar.length,
+            itemBuilder: (context, index) {
+              final t = tahsilatlar[index];
+              return AnimatedListItem(
+                index: index,
+                child: SwipeableCard(
+                  onEdit: () {
+                    final tahsilat = Tahsilat(
+                      id: t['id'],
+                      musteriId: t['musteri_id'],
+                      tarih: DateTime.parse(t['tarih']),
+                      tutar: (t['tutar'] ?? 0).toDouble(),
+                      odemeSekli: t['odeme_sekli'] ?? 'nakit',
+                      kasaAdi: t['kasa_adi'],
+                      aciklama: t['aciklama'],
+                    );
+                    _showTahsilatEkleDialog(tahsilat: tahsilat);
+                  },
+                  onDelete: () async {
+                    await provider.deleteTahsilat(t['id']);
+                    setState(() {});
+                  },
+                  deleteConfirmTitle: 'Tahsilat Sil',
+                  deleteConfirmMessage: 'Bu tahsilatı silmek istediğinize emin misiniz?',
+                  child: Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.green.withValues(alpha: 0.2),
+                        child: const Icon(Icons.payments, color: Colors.green),
+                      ),
+                      title: Text(t['musteri_unvan'] ?? 'Bilinmeyen'),
+                      subtitle: Text(
+                        DateFormat('dd.MM.yyyy').format(DateTime.parse(t['tarih'])),
+                      ),
+                      trailing: Text(
+                        _currencyFormat.format(t['tutar']),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         );
       },
     );
@@ -273,98 +334,107 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
   }
 
   Widget _buildMusteriCard(Musteri musteri, double bakiye, bool isDark, Color primaryColor) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: primaryColor.withValues(alpha: 0.2),
-          child: Text(
-            musteri.unvan.isNotEmpty ? musteri.unvan[0].toUpperCase() : '?',
-            style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+    return SwipeableCard(
+      onEdit: () => _showMusteriEkleDialog(musteri: musteri),
+      onDelete: () async {
+        if (musteri.id != null) {
+          await context.read<AppProvider>().deleteMusteri(musteri.id!);
+          setState(() {});
+        }
+      },
+      deleteConfirmTitle: 'Müşteri Sil',
+      deleteConfirmMessage: 'Bu müşteriyi silmek istediğinize emin misiniz?',
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: primaryColor.withValues(alpha: 0.2),
+            child: Text(
+              musteri.unvan.isNotEmpty ? musteri.unvan[0].toUpperCase() : '?',
+              style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
-        title: Text(musteri.unvan),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (musteri.yetkiliKisi != null && musteri.yetkiliKisi!.isNotEmpty)
-              Text(musteri.yetkiliKisi!, style: const TextStyle(fontSize: 12)),
-            if (musteri.telefon != null && musteri.telefon!.isNotEmpty)
-              Text(musteri.telefon!, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              bakiye >= 0 ? 'Alacak' : 'Borç',
-              style: TextStyle(
-                fontSize: 11,
-                color: bakiye >= 0 ? Colors.orange : Colors.green,
+          title: Text(musteri.unvan),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (musteri.yetkiliKisi != null && musteri.yetkiliKisi!.isNotEmpty)
+                Text(musteri.yetkiliKisi!, style: const TextStyle(fontSize: 12)),
+              if (musteri.telefon != null && musteri.telefon!.isNotEmpty)
+                Text(musteri.telefon!, style: const TextStyle(fontSize: 12)),
+            ],
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                bakiye >= 0 ? 'Alacak' : 'Borç',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: bakiye >= 0 ? Colors.orange : Colors.green,
+                ),
               ),
-            ),
-            Text(
-              _currencyFormat.format(bakiye.abs()),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: bakiye >= 0 ? Colors.orange : Colors.green,
+              Text(
+                _currencyFormat.format(bakiye.abs()),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: bakiye >= 0 ? Colors.orange : Colors.green,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
+          onTap: () => _showMusteriDetay(musteri),
         ),
-        onTap: () => _showMusteriDetay(musteri),
       ),
     );
   }
 
   Widget _buildSatisCard(Satis satis, bool isDark, Color primaryColor) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Colors.green.withValues(alpha: 0.2),
-          child: const Icon(Icons.receipt, color: Colors.green),
+    return SwipeableCard(
+      onEdit: () => _showSatisEkleDialog(satis: satis),
+      onDelete: () async {
+        if (satis.id != null) {
+          await context.read<AppProvider>().deleteSatis(satis.id!);
+          setState(() {});
+        }
+      },
+      deleteConfirmTitle: 'Satış Sil',
+      deleteConfirmMessage: 'Bu satışı silmek istediğinize emin misiniz?',
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: ListTile(
+          leading: CircleAvatar(
+            backgroundColor: Colors.green.withValues(alpha: 0.2),
+            child: const Icon(Icons.receipt, color: Colors.green),
+          ),
+          title: Text(satis.musteriUnvan ?? 'Bilinmeyen Müşteri'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(satis.urunAdi),
+              Text(
+                '${satis.miktar} ${satis.birim} x ${_currencyFormat.format(satis.birimFiyat)}',
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                DateFormat('dd.MM.yyyy').format(satis.tarih),
+                style: const TextStyle(fontSize: 11),
+              ),
+              Text(
+                _currencyFormat.format(satis.toplamTutar),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          onTap: () => _showSatisDetay(satis),
         ),
-        title: Text(satis.musteriUnvan ?? 'Bilinmeyen Müşteri'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(satis.urunAdi),
-            Text(
-              '${satis.miktar} ${satis.birim} x ${_currencyFormat.format(satis.birimFiyat)}',
-              style: const TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              DateFormat('dd.MM.yyyy').format(satis.tarih),
-              style: const TextStyle(fontSize: 11),
-            ),
-            Text(
-              _currencyFormat.format(satis.toplamTutar),
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        onTap: () => _showSatisDetay(satis),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String message, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 64, color: Colors.grey),
-          const SizedBox(height: 16),
-          Text(message, style: const TextStyle(color: Colors.grey)),
-        ],
       ),
     );
   }
@@ -653,7 +723,11 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
                   await context.read<AppProvider>().addSatis(yeniSatis);
                 }
 
-                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  Navigator.pop(context);
+                  // Listeyi yenile
+                  this.setState(() {});
+                }
               },
               child: Text(isEdit ? 'Güncelle' : 'Kaydet'),
             ),
@@ -663,7 +737,7 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
     );
   }
 
-  void _showTahsilatEkleDialog({int? musteriId}) {
+  void _showTahsilatEkleDialog({int? musteriId, Tahsilat? tahsilat}) {
     final provider = context.read<AppProvider>();
     final musteriler = provider.musteriler;
     final kasalar = provider.kasalar;
@@ -675,18 +749,19 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
       return;
     }
 
-    int? selectedMusteriId = musteriId ?? musteriler.first.id;
-    final tutarController = TextEditingController();
-    final aciklamaController = TextEditingController();
-    DateTime tarih = DateTime.now();
-    String odemeSekli = 'nakit';
-    String? selectedKasa = kasalar.isNotEmpty ? kasalar.first : null;
+    final bool isEdit = tahsilat != null;
+    int? selectedMusteriId = tahsilat?.musteriId ?? musteriId ?? musteriler.first.id;
+    final tutarController = TextEditingController(text: isEdit ? tahsilat.tutar.toString() : '');
+    final aciklamaController = TextEditingController(text: tahsilat?.aciklama ?? '');
+    DateTime tarih = tahsilat?.tarih ?? DateTime.now();
+    String odemeSekli = tahsilat?.odemeSekli ?? 'nakit';
+    String? selectedKasa = tahsilat?.kasaAdi ?? (kasalar.isNotEmpty ? kasalar.first : null);
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('Tahsilat Ekle'),
+          title: Text(isEdit ? 'Tahsilat Düzenle' : 'Tahsilat Ekle'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -789,18 +864,37 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
 
                 final tutar = double.tryParse(tutarController.text) ?? 0;
 
-                await context.read<AppProvider>().addTahsilat(
-                  musteriId: selectedMusteriId!,
-                  tarih: tarih,
-                  tutar: tutar,
-                  odemeSekli: odemeSekli,
-                  kasaAdi: selectedKasa,
-                  aciklama: aciklamaController.text.isEmpty ? null : aciklamaController.text,
-                );
+                if (isEdit && tahsilat.id != null) {
+                  // Güncelleme
+                  await context.read<AppProvider>().updateTahsilat(
+                    tahsilat.id!,
+                    {
+                      'musteri_id': selectedMusteriId!,
+                      'tarih': tarih.toIso8601String(),
+                      'tutar': tutar,
+                      'odeme_sekli': odemeSekli,
+                      'kasa_adi': selectedKasa,
+                      'aciklama': aciklamaController.text.isEmpty ? null : aciklamaController.text,
+                    },
+                  );
+                } else {
+                  // Yeni ekle
+                  await context.read<AppProvider>().addTahsilat(
+                    musteriId: selectedMusteriId!,
+                    tarih: tarih,
+                    tutar: tutar,
+                    odemeSekli: odemeSekli,
+                    kasaAdi: selectedKasa,
+                    aciklama: aciklamaController.text.isEmpty ? null : aciklamaController.text,
+                  );
+                }
 
-                if (mounted) Navigator.pop(context);
+                if (mounted) {
+                  Navigator.pop(context);
+                  setState(() {}); // Listeyi yenile
+                }
               },
-              child: const Text('Kaydet'),
+              child: Text(isEdit ? 'Güncelle' : 'Kaydet'),
             ),
           ],
         ),
@@ -1043,6 +1137,7 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
               );
               if (confirm == true) {
                 await context.read<AppProvider>().deleteSatis(satis.id!);
+                setState(() {});
               }
             },
             child: const Text('Sil', style: TextStyle(color: Colors.red)),

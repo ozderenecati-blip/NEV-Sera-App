@@ -22,6 +22,7 @@ class KasaHareketi {
   final double? tlKarsiligi; // TL karşılığı
   final String? islemKaynagi; // 'kasa', 'gider_pusulasi', 'kredi_odeme', 'resmilestirme'
   final int? iliskiliId;     // Gider pusulası veya kredi ID'si
+  final String? fisUrl;      // Fiş/Fatura görseli URL'si
 
   KasaHareketi({
     this.id,
@@ -37,6 +38,7 @@ class KasaHareketi {
     this.tlKarsiligi,
     this.islemKaynagi = 'kasa',
     this.iliskiliId,
+    this.fisUrl,
   });
 
   Map<String, dynamic> toMap() {
@@ -54,6 +56,7 @@ class KasaHareketi {
       'tl_karsiligi': tlKarsiligi,
       'islem_kaynagi': islemKaynagi,
       'iliskili_id': iliskiliId,
+      'fis_url': fisUrl,
     };
   }
 
@@ -72,6 +75,7 @@ class KasaHareketi {
       tlKarsiligi: map['tl_karsiligi']?.toDouble(),
       islemKaynagi: map['islem_kaynagi'] ?? 'kasa',
       iliskiliId: map['iliskili_id'],
+      fisUrl: map['fis_url'],
     );
   }
 
@@ -89,6 +93,7 @@ class KasaHareketi {
     double? tlKarsiligi,
     String? islemKaynagi,
     int? iliskiliId,
+    String? fisUrl,
   }) {
     return KasaHareketi(
       id: id ?? this.id,
@@ -104,6 +109,7 @@ class KasaHareketi {
       tlKarsiligi: tlKarsiligi ?? this.tlKarsiligi,
       islemKaynagi: islemKaynagi ?? this.islemKaynagi,
       iliskiliId: iliskiliId ?? this.iliskiliId,
+      fisUrl: fisUrl ?? this.fisUrl,
     );
   }
   

@@ -1189,6 +1189,8 @@ class _KasaScreenState extends State<KasaScreen> {
     int? selectedTaksitId; // Kredi taksiti için
     DateTime selectedDate = hareket?.tarih ?? DateTime.now();
     bool islemUcretiAktif = false;
+    String? fisUrl = hareket?.fisUrl; // Fiş görseli URL'si
+    bool fisYukleniyor = false;
 
     showModalBottomSheet(
       context: context,
@@ -2159,6 +2161,137 @@ class _KasaScreenState extends State<KasaScreen> {
                               ),
                             ),
 
+                            const SizedBox(height: 16),
+
+                            // Fiş Görseli Ekleme
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.receipt_long, color: Colors.teal.shade600),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'Fiş / Fatura Görseli',
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                      const Spacer(),
+                                      if (fisUrl != null && fisUrl!.isNotEmpty)
+                                        IconButton(
+                                          icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                          onPressed: () {
+                                            setModalState(() => fisUrl = null);
+                                          },
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  if (fisYukleniyor)
+                                    const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(20),
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    )
+                                  else if (fisUrl != null && fisUrl!.isNotEmpty)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        fisUrl!,
+                                        height: 150,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (ctx, err, stack) => Container(
+                                          height: 100,
+                                          color: Colors.grey.shade200,
+                                          child: const Center(
+                                            child: Icon(Icons.broken_image, size: 40),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () async {
+                                              final picker = ImagePicker();
+                                              final image = await picker.pickImage(
+                                                source: ImageSource.camera,
+                                                maxWidth: 1200,
+                                                imageQuality: 80,
+                                              );
+                                              if (image != null) {
+                                                setModalState(() => fisYukleniyor = true);
+                                                try {
+                                                  final bytes = await image.readAsBytes();
+                                                  final fisService = FisStorageService();
+                                                  final url = await fisService.uploadFisGorseli(bytes, fileName: image.name);
+                                                  setModalState(() {
+                                                    fisUrl = url;
+                                                    fisYukleniyor = false;
+                                                  });
+                                                } catch (e) {
+                                                  setModalState(() => fisYukleniyor = false);
+                                                  if (ctx.mounted) {
+                                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                                      SnackBar(content: Text('Yükleme hatası: $e')),
+                                                    );
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            icon: const Icon(Icons.camera_alt),
+                                            label: const Text('Kamera'),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            onPressed: () async {
+                                              final picker = ImagePicker();
+                                              final image = await picker.pickImage(
+                                                source: ImageSource.gallery,
+                                                maxWidth: 1200,
+                                                imageQuality: 80,
+                                              );
+                                              if (image != null) {
+                                                setModalState(() => fisYukleniyor = true);
+                                                try {
+                                                  final bytes = await image.readAsBytes();
+                                                  final fisService = FisStorageService();
+                                                  final url = await fisService.uploadFisGorseli(bytes, fileName: image.name);
+                                                  setModalState(() {
+                                                    fisUrl = url;
+                                                    fisYukleniyor = false;
+                                                  });
+                                                } catch (e) {
+                                                  setModalState(() => fisYukleniyor = false);
+                                                  if (ctx.mounted) {
+                                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                                      SnackBar(content: Text('Yükleme hatası: $e')),
+                                                    );
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            icon: const Icon(Icons.photo_library),
+                                            label: const Text('Galeri'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+
                             const SizedBox(height: 24),
 
                             // Kaydet
@@ -2191,6 +2324,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                       selectedTaksitId: selectedTaksitId,
                                       selectedDate: selectedDate,
                                       islemUcretiAktif: islemUcretiAktif,
+                                      fisUrl: fisUrl,
                                     ),
                                 child: Text(isEdit ? 'Güncelle' : 'Kaydet'),
                               ),
@@ -2231,6 +2365,7 @@ class _KasaScreenState extends State<KasaScreen> {
     int? selectedTaksitId,
     required DateTime selectedDate,
     required bool islemUcretiAktif,
+    String? fisUrl,
   }) async {
     final tutar = double.tryParse(tutarController.text.replaceAll(',', '.'));
 
@@ -2399,6 +2534,7 @@ class _KasaScreenState extends State<KasaScreen> {
           islemKaynagi == 'gider_pusulasi'
               ? selectedGundelikciId
               : (islemKaynagi == 'kredi_odeme' ? selectedTaksitId : null),
+      fisUrl: fisUrl,
     );
 
     if (isEdit) {

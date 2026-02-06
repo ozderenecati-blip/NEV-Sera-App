@@ -1473,7 +1473,7 @@ class _KasaScreenState extends State<KasaScreen> {
                             if (islemModu == 'giris' ||
                                 islemModu == 'cikis') ...[
                               DropdownButtonFormField<String>(
-                                initialValue: islemKaynagi,
+                                value: islemKaynagi,
                                 decoration: const InputDecoration(
                                   labelText: 'İşlem Kaynağı',
                                   border: OutlineInputBorder(),
@@ -1514,7 +1514,7 @@ class _KasaScreenState extends State<KasaScreen> {
                             // Gündelikçi seçimi
                             if (islemKaynagi == 'gider_pusulasi') ...[
                               DropdownButtonFormField<int>(
-                                initialValue: selectedGundelikciId,
+                                value: selectedGundelikciId,
                                 decoration: const InputDecoration(
                                   labelText: 'Çalışan *',
                                   border: OutlineInputBorder(),
@@ -1542,7 +1542,7 @@ class _KasaScreenState extends State<KasaScreen> {
                             // Kredi ve Taksit Seçimi
                             if (islemKaynagi == 'kredi_odeme') ...[
                               DropdownButtonFormField<int>(
-                                initialValue: selectedKrediId,
+                                value: selectedKrediId,
                                 decoration: const InputDecoration(
                                   labelText: 'Kredi Seçin *',
                                   border: OutlineInputBorder(),
@@ -1762,7 +1762,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                 children: [
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: selectedParaBirimi,
+                                      value: selectedParaBirimi,
                                       decoration: const InputDecoration(
                                         labelText: 'Satılacak',
                                         border: OutlineInputBorder(),
@@ -1798,7 +1798,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                   ),
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: hedefParaBirimi,
+                                      value: hedefParaBirimi,
                                       decoration: const InputDecoration(
                                         labelText: 'Alınacak',
                                         border: OutlineInputBorder(),
@@ -1866,7 +1866,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                     SizedBox(
                                       width: 110,
                                       child: DropdownButtonFormField<String>(
-                                        initialValue: selectedParaBirimi,
+                                        value: selectedParaBirimi,
                                         decoration: const InputDecoration(
                                           labelText: 'Birim',
                                           border: OutlineInputBorder(),

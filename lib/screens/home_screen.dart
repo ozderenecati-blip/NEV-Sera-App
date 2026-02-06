@@ -279,8 +279,7 @@ class DashboardTab extends StatelessWidget {
     NumberFormat fmt,
   ) {
     final bekleyenler = provider.bekleyenOdemeler;
-    final yakinOdemeler =
-        bekleyenler.where((o) => o.vadeKalanGun <= 7).toList();
+    final yakinOdemeler = bekleyenler; // Tüm bekleyen ödemeleri göster
 
     return Card(
       child: Padding(
@@ -310,7 +309,7 @@ class DashboardTab extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Center(
                   child: Text(
-                    '7 gün içinde ödeme yok',
+                    'Bekleyen ödeme yok',
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                 ),
@@ -508,7 +507,7 @@ class DashboardTab extends StatelessWidget {
                               SizedBox(
                                 width: 90,
                                 child: DropdownButtonFormField<String>(
-                                  initialValue: paraBirimi,
+                                  value: paraBirimi,
                                   decoration: const InputDecoration(
                                     labelText: 'Birim',
                                     border: OutlineInputBorder(),
@@ -586,7 +585,7 @@ class DashboardTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            initialValue: alarmGunOnce,
+                            value: alarmGunOnce,
                             decoration: const InputDecoration(
                               labelText: 'Hatırlatma',
                               border: OutlineInputBorder(),
@@ -772,7 +771,7 @@ class DashboardTab extends StatelessWidget {
                               SizedBox(
                                 width: 90,
                                 child: DropdownButtonFormField<String>(
-                                  initialValue: paraBirimi,
+                                  value: paraBirimi,
                                   decoration: const InputDecoration(
                                     labelText: 'Birim',
                                     border: OutlineInputBorder(),
@@ -850,7 +849,7 @@ class DashboardTab extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<int>(
-                            initialValue: alarmGunOnce,
+                            value: alarmGunOnce,
                             decoration: const InputDecoration(
                               labelText: 'Hatırlatma',
                               border: OutlineInputBorder(),
@@ -957,7 +956,7 @@ class DashboardTab extends StatelessWidget {
                       ),
                       if (kasaKaydiOlustur && provider.kasalar.isNotEmpty)
                         DropdownButtonFormField<String>(
-                          initialValue: selectedKasa,
+                          value: selectedKasa,
                           decoration: const InputDecoration(
                             labelText: 'Kasa',
                             border: OutlineInputBorder(),

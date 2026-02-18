@@ -493,20 +493,35 @@ class DatabaseService {
         final ortakId = _getIntId('ortaklar', doc.id);
         data['id'] = ortakId;
         
+        final ortakAdi = data['ad_soyad'] as String? ?? '';
+        
         // Bu ortağın işlemlerini hesapla
         double toplamVerilen = 0;
         double toplamGeriOdenen = 0;
         double toplamStopaj = 0;
         
         for (var h in hareketler) {
+          final tutar = h.tlKarsiligi ?? h.tutar;
+          
+          // İlişkili ID ile eşleşen işlemler
           if (h.iliskiliId == ortakId) {
-            final tutar = h.tlKarsiligi ?? h.tutar;
             if (h.islemKaynagi == 'ortak_avans') {
               toplamVerilen += tutar;
             } else if (h.islemKaynagi == 'ortak_geri_odeme') {
               toplamGeriOdenen += tutar;
             } else if (h.islemKaynagi == 'ortak_stopaj') {
               toplamStopaj += tutar;
+            }
+          }
+          
+          // Kasa adı ortağın adıyla eşleşen işlemler (ortağın kişisel kasasından yapılan harcamalar)
+          if (h.kasa != null && h.kasa == ortakAdi && h.islemKaynagi == 'kasa') {
+            if (h.islemTipi == 'Çıkış') {
+              // Ortağın kasasından çıkış = şirket ortağa borçlanıyor
+              toplamVerilen += tutar;
+            } else if (h.islemTipi == 'Giriş') {
+              // Ortağın kasasına giriş = şirket ortağa geri ödeme yapıyor
+              toplamGeriOdenen += tutar;
             }
           }
         }
@@ -580,6 +595,14 @@ class DatabaseService {
   Future<Map<String, double>> getOrtakOzet() async {
     try {
       final hareketler = await getKasaHareketleri();
+      final ortaklar = await _db.collection('ortaklar').get();
+      
+      // Ortak isimlerini al
+      final ortakIsimleri = ortaklar.docs
+          .map((doc) => doc.data()['ad_soyad'] as String?)
+          .where((name) => name != null)
+          .cast<String>()
+          .toSet();
       
       double toplamVerilen = 0;
       double toplamGeriOdenen = 0;
@@ -587,15 +610,22 @@ class DatabaseService {
       
       for (var h in hareketler) {
         final tutar = h.tlKarsiligi ?? h.tutar;
+        
+        // Özel ortak işlem kaynakları
         if (h.islemKaynagi == 'ortak_avans') {
-          // Ortağın şirket için yaptığı harcama (şirketin ortağa borcu)
           toplamVerilen += tutar;
         } else if (h.islemKaynagi == 'ortak_geri_odeme') {
-          // Şirketin ortağa geri ödemesi
           toplamGeriOdenen += tutar;
         } else if (h.islemKaynagi == 'ortak_stopaj') {
-          // Kesilen stopaj
           toplamStopaj += tutar;
+        }
+        // Kasa adı bir ortağın adıyla eşleşiyorsa
+        else if (h.kasa != null && ortakIsimleri.contains(h.kasa) && h.islemKaynagi == 'kasa') {
+          if (h.islemTipi == 'Çıkış') {
+            toplamVerilen += tutar;
+          } else if (h.islemTipi == 'Giriş') {
+            toplamGeriOdenen += tutar;
+          }
         }
       }
       

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/modern_widgets.dart';
-import 'home_screen.dart';
+import 'module_selection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,9 +22,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _obscurePassword = true;
   bool _rememberMe = false;
   String? _errorMessage;
-
-  static const String _validUsername = 'NEV';
-  static const String _validPassword = 'NevBB092025';
 
   @override
   void initState() {
@@ -48,14 +47,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   Future<void> _checkLoggedIn() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-    
-    if (isLoggedIn && mounted) {
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.isLoggedIn && mounted) {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => const ModuleSelectionScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -75,17 +72,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _errorMessage = null;
     });
 
-    await Future.delayed(const Duration(milliseconds: 800));
-
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (username == _validUsername && password == _validPassword) {
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.login(username, password);
+
+    if (success) {
       HapticHelper.success();
       
+      // Beni Hatırla
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', true);
-      
       await prefs.setBool('rememberMe', _rememberMe);
       if (_rememberMe) {
         await prefs.setString('savedUsername', username);
@@ -99,7 +96,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+            pageBuilder: (context, animation, secondaryAnimation) => const ModuleSelectionScreen(),
             transitionsBuilder: (context, animation, secondaryAnimation, child) {
               return FadeTransition(opacity: animation, child: child);
             },
@@ -110,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     } else {
       HapticHelper.error();
       setState(() {
-        _errorMessage = 'Kullanıcı adı veya şifre hatalı';
+        _errorMessage = authProvider.error ?? 'Kullanıcı adı veya şifre hatalı';
         _isLoading = false;
       });
     }
@@ -200,7 +197,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0),
         const SizedBox(height: 8),
         Text(
-          'Finansal Yönetim Sistemi',
+          'Sera Yönetim Sistemi',
           style: TextStyle(
             fontSize: 16,
             color: Colors.white.withOpacity(0.8),

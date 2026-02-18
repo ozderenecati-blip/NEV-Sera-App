@@ -296,7 +296,7 @@ class _KasaScreenState extends State<KasaScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: _filterKasa,
+                  initialValue: _filterKasa,
                   isDense: true,
                   decoration: const InputDecoration(
                       labelText: 'Kasa',
@@ -318,7 +318,7 @@ class _KasaScreenState extends State<KasaScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _filterIslemTipi,
+                    initialValue: _filterIslemTipi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Tip',
@@ -343,7 +343,7 @@ class _KasaScreenState extends State<KasaScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _filterIslemKaynagi,
+                    initialValue: _filterIslemKaynagi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Kaynak',
@@ -391,7 +391,7 @@ class _KasaScreenState extends State<KasaScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _filterParaBirimi,
+                    initialValue: _filterParaBirimi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Para Birimi',
@@ -1699,7 +1699,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
-                                        value: selectedKasa,
+                                        initialValue: selectedKasa,
                                         decoration: const InputDecoration(
                                           labelText: 'Kaynak Kasa *',
                                           border: OutlineInputBorder(),
@@ -1730,7 +1730,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                     ),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
-                                        value: hedefKasa,
+                                        initialValue: hedefKasa,
                                         decoration: const InputDecoration(
                                           labelText: 'Hedef Kasa *',
                                           border: OutlineInputBorder(),
@@ -2004,7 +2004,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                       ),
                                     )
                                   : DropdownButtonFormField<String>(
-                                      value: selectedKasa,
+                                      initialValue: selectedKasa,
                                       decoration: const InputDecoration(
                                         labelText: 'Kasa *',
                                         border: OutlineInputBorder(),

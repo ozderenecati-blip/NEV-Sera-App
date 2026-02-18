@@ -5,9 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
 import 'providers/app_provider.dart';
+import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
-import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/module_selection_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/notification_service.dart';
 import 'config/firebase_config.dart';
@@ -79,10 +80,9 @@ class NevSeracilikApp extends StatelessWidget {
   Widget _getInitialScreen() {
     if (!onboardingCompleted) {
       return const OnboardingScreen();
-    } else if (!isLoggedIn) {
-      return const LoginScreen();
     } else {
-      return const HomeScreen();
+      // AuthProvider kontrolü Consumer ile yapılacak
+      return const _AuthGate();
     }
   }
 
@@ -91,6 +91,7 @@ class NevSeracilikApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppProvider()..loadAllData()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()..initialize()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: Consumer<ThemeProvider>(
@@ -106,5 +107,21 @@ class NevSeracilikApp extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+/// Auth durumuna göre yönlendirme
+class _AuthGate extends StatelessWidget {
+  const _AuthGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    
+    if (authProvider.isLoggedIn) {
+      return const ModuleSelectionScreen();
+    } else {
+      return const LoginScreen();
+    }
   }
 }

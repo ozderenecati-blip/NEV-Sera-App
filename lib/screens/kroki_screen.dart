@@ -62,6 +62,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
 
   @override
   void dispose() {
+    _zoomCtrl.dispose();
     for (final c in _bahceMetreCtrl) {
       c.dispose();
     }
@@ -163,36 +164,58 @@ class _KrokiScreenState extends State<KrokiScreen> {
       minY = min(minY, k.y);
       maxY = max(maxY, k.y);
     }
-    const padding = 50.0;
-    final usableW = _canvasSize.width - padding * 2;
-    final usableH = _canvasSize.height - padding * 2;
+    const padding = 80.0;
+    // Canvas artık 2000x2000 ama görünür alan _canvasSize kadar
+    final targetW = _canvasSize.width - padding * 2;
+    final targetH = _canvasSize.height - padding * 2;
     final rangeX = maxX - minX;
     final rangeY = maxY - minY;
     final maxRange = max(rangeX, rangeY);
     final scale =
-        maxRange > 0 ? min(usableW, usableH) / maxRange : 1.0;
+        maxRange > 0 ? min(targetW, targetH) / maxRange : 1.0;
     final cx = (minX + maxX) / 2;
     final cy = (minY + maxY) / 2;
+    // Merkez: görünür alanın ortası (canvas 2000x2000 ama view küçük)
+    final centerX = _canvasSize.width / 2;
+    final centerY = _canvasSize.height / 2;
 
     _bahcePoints = koseler
         .map((k) => Offset(
-              (k.x - cx) * scale + _canvasSize.width / 2,
-              (k.y - cy) * scale + _canvasSize.height / 2,
+              (k.x - cx) * scale + centerX,
+              (k.y - cy) * scale + centerY,
             ))
         .toList();
     _bahceMetreler = koseler.map((k) => k.metraj).toList();
     _initBahceMetreCtrl();
 
-    // Parsel köşelerini de yükle
+    // Parsel köşelerini de aynı scale/center ile yükle
     for (int pi = 0;
         pi < _parseller.length && pi < widget.bahce.parseller.length;
         pi++) {
       final pKoseler = widget.bahce.parseller[pi].koseler;
       if (pKoseler.isNotEmpty) {
+        // Parsel köşeleri de aynı koordinat sisteminde kaydedildi
+        // Ancak parsel'in kendi min offset'i farklı olabilir
+        // Bu yüzden parselin köşelerini de bahçe ile aynı şekilde dönüştürmeliyiz
+        double pMinX = double.infinity, pMaxX = -double.infinity;
+        double pMinY = double.infinity, pMaxY = -double.infinity;
+        for (final k in pKoseler) {
+          pMinX = min(pMinX, k.x);
+          pMaxX = max(pMaxX, k.x);
+          pMinY = min(pMinY, k.y);
+          pMaxY = max(pMaxY, k.y);
+        }
+        // Parsel'in pxPerMetre'si bahçe ile aynı scale kullanmalı
+        // Ancak parsel kendi koordinat sistemiyle kaydedildi (0,0 origin)
+        // Parselin bahçe içindeki konumunu doğru kurtarmak için:
+        // Parselin metre koordinatlarını bahçe scale ile piksele çevirelim
+        // Parsel köşelerini bahçe alanının içine yerleştirelim
+        final pCx = (pMinX + pMaxX) / 2;
+        final pCy = (pMinY + pMaxY) / 2;
         _parseller[pi].points = pKoseler
             .map((k) => Offset(
-                  (k.x - cx) * scale + _canvasSize.width / 2,
-                  (k.y - cy) * scale + _canvasSize.height / 2,
+                  (k.x - pCx) * scale + centerX,
+                  (k.y - pCy) * scale + centerY,
                 ))
             .toList();
         _parseller[pi].metreler =
@@ -355,77 +378,71 @@ class _KrokiScreenState extends State<KrokiScreen> {
   // ═══════════════════════════════════════════════════════
   // 1) BAHÇE SINIRI
   // ═══════════════════════════════════════════════════════
+  // ── Zoom kontrolcüler ──
+  final TransformationController _zoomCtrl = TransformationController();
+
   Widget _buildBahceSiniriView() {
     return Column(
       children: [
         Expanded(
           flex: 3,
-          child: GestureDetector(
-            onTapDown: (d) => setState(() {
-              _bahcePoints.add(d.localPosition);
-              _bahceMetreler.add(0);
-              _gpsPositions.add(null);
-              _gpsDistances.add(null);
-              _initBahceMetreCtrl();
-            }),
-            onPanStart: (d) {
-              double minD = 35;
-              int? closest;
-              for (int i = 0; i < _bahcePoints.length; i++) {
-                final dist =
-                    (_bahcePoints[i] - d.localPosition).distance;
-                if (dist < minD) {
-                  minD = dist;
-                  closest = i;
-                }
-              }
-              _draggingBahceIdx = closest;
-            },
-            onPanUpdate: (d) {
-              if (_draggingBahceIdx != null) {
-                setState(() => _bahcePoints[_draggingBahceIdx!] =
-                    d.localPosition);
-              }
-            },
-            onPanEnd: (_) => _draggingBahceIdx = null,
-            child: Container(
-              color: Colors.grey.shade50,
-              child: CustomPaint(
-                painter: _BahceSinirPainter(
-                  points: _bahcePoints,
-                  dragging: _draggingBahceIdx,
+          child: InteractiveViewer(
+            transformationController: _zoomCtrl,
+            minScale: 0.3,
+            maxScale: 5.0,
+            boundaryMargin: const EdgeInsets.all(300),
+            child: GestureDetector(
+              onTapDown: (d) {
+                final pos = d.localPosition;
+                setState(() {
+                  _bahcePoints.add(pos);
+                  _bahceMetreler.add(0);
+                  _gpsPositions.add(null);
+                  _gpsDistances.add(null);
+                  _initBahceMetreCtrl();
+                });
+              },
+              child: Container(
+                width: 2000,
+                height: 2000,
+                color: Colors.grey.shade50,
+                child: CustomPaint(
+                  painter: _BahceSinirPainter(
+                    points: _bahcePoints,
+                    dragging: _draggingBahceIdx,
+                  ),
+                  size: const Size(2000, 2000),
+                  child: _bahcePoints.isEmpty
+                      ? Center(
+                          child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.gps_fixed,
+                              size: 56,
+                              color: const Color(0xFFD97706),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Köşeye tıklayın veya GPS ile işaretleyin',
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Sırası ile köşe noktalarını belirleyin',
+                              style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ).animate().fadeIn())
+                      : null,
                 ),
-                size: Size.infinite,
-                child: _bahcePoints.isEmpty
-                    ? Center(
-                        child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.gps_fixed,
-                            size: 56,
-                            color: const Color(0xFFD97706),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Köşeye tıklayın veya GPS ile işaretleyin',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Sırası ile köşe noktalarını belirleyin',
-                            style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ).animate().fadeIn())
-                    : null,
               ),
             ),
           ),
@@ -572,8 +589,14 @@ class _KrokiScreenState extends State<KrokiScreen> {
                     padding: const EdgeInsets.only(
                         right: 6, top: 6, bottom: 6),
                     child: ChoiceChip(
-                      label:
+                      label: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           Text(e.value.ad, style: const TextStyle(fontSize: 12)),
+                          if (e.value.cins != null && e.value.cins!.isNotEmpty)
+                            Text(e.value.cins!, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+                        ],
+                      ),
                       selected: _activeParselIdx == e.key,
                       selectedColor:
                           const Color(0xFF059669).withOpacity(0.2),
@@ -598,79 +621,56 @@ class _KrokiScreenState extends State<KrokiScreen> {
         // Canvas
         Expanded(
           flex: 3,
-          child: GestureDetector(
-            onTapDown: (d) {
-              if (_activeParselIdx >= 0 &&
-                  _activeParselIdx < _parseller.length) {
-                setState(() {
-                  _parseller[_activeParselIdx].points
-                      .add(d.localPosition);
-                  _parseller[_activeParselIdx].metreler.add(0);
-                  _parseller[_activeParselIdx].initMetreCtrl();
-                });
-              }
-            },
-            onPanStart: (d) {
-              if (_activeParselIdx < 0) return;
-              final pts = _parseller[_activeParselIdx].points;
-              double minD = 35;
-              int? closest;
-              for (int i = 0; i < pts.length; i++) {
-                final dist = (pts[i] - d.localPosition).distance;
-                if (dist < minD) {
-                  minD = dist;
-                  closest = i;
+          child: InteractiveViewer(
+            transformationController: _zoomCtrl,
+            minScale: 0.3,
+            maxScale: 5.0,
+            boundaryMargin: const EdgeInsets.all(300),
+            child: GestureDetector(
+              onTapDown: (d) {
+                if (_activeParselIdx >= 0 &&
+                    _activeParselIdx < _parseller.length) {
+                  final pos = d.localPosition;
+                  setState(() {
+                    _parseller[_activeParselIdx].points.add(pos);
+                    _parseller[_activeParselIdx].metreler.add(0);
+                    _parseller[_activeParselIdx].initMetreCtrl();
+                  });
                 }
-              }
-              if (closest != null) {
-                _draggingParselIdx = _activeParselIdx;
-                _draggingParselKoseIdx = closest;
-              }
-            },
-            onPanUpdate: (d) {
-              if (_draggingParselIdx != null &&
-                  _draggingParselKoseIdx != null) {
-                setState(() {
-                  _parseller[_draggingParselIdx!]
-                          .points[_draggingParselKoseIdx!] =
-                      d.localPosition;
-                });
-              }
-            },
-            onPanEnd: (_) {
-              _draggingParselIdx = null;
-              _draggingParselKoseIdx = null;
-            },
-            child: Container(
-              color: Colors.grey.shade50,
-              child: CustomPaint(
-                painter: _ParselCizimPainter(
-                  bahcePoints: _bahcePoints,
-                  parseller: _parseller,
-                  activeIdx: _activeParselIdx,
-                  draggingParselIdx: _draggingParselIdx,
-                  draggingKoseIdx: _draggingParselKoseIdx,
+              },
+              child: Container(
+                width: 2000,
+                height: 2000,
+                color: Colors.grey.shade50,
+                child: CustomPaint(
+                  painter: _ParselCizimPainter(
+                    bahcePoints: _bahcePoints,
+                    parseller: _parseller,
+                    activeIdx: _activeParselIdx,
+                    draggingParselIdx: _draggingParselIdx,
+                    draggingKoseIdx: _draggingParselKoseIdx,
+                  ),
+                  size: const Size(2000, 2000),
+                  child: _parseller.isEmpty || _activeParselIdx < 0
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.grid_view,
+                                  size: 48,
+                                  color: Color(0xFF059669)),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Önce parsel ekleyin, sonra köşe tıklayın',
+                                style: TextStyle(
+                                    color: Colors.grey.shade500,
+                                    fontSize: 14),
+                              ),
+                            ],
+                          ),
+                        )
+                      : null,
                 ),
-                size: Size.infinite,
-                child: _parseller.isEmpty || _activeParselIdx < 0
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.grid_view,
-                                size: 48,
-                                color: Color(0xFF059669)),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Önce parsel ekleyin, sonra köşe tıklayın',
-                              style: TextStyle(
-                                  color: Colors.grey.shade500,
-                                  fontSize: 14),
-                            ),
-                          ],
-                        ),
-                      )
-                    : null,
               ),
             ),
           ),
@@ -794,18 +794,35 @@ class _KrokiScreenState extends State<KrokiScreen> {
   void _addNewParsel() {
     final nameCtrl =
         TextEditingController(text: 'P-${_parseller.length + 1}');
+    final cinsCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Yeni Parsel'),
-        content: TextField(
-          controller: nameCtrl,
-          decoration: InputDecoration(
-            labelText: 'Parsel Adı',
-            hintText: 'ör: O_07',
-            border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Parsel Adı',
+                hintText: 'ör: O_07',
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: cinsCtrl,
+              decoration: InputDecoration(
+                labelText: 'Fidan Cinsi',
+                hintText: 'ör: Domates, Biber, Çilek...',
+                prefixIcon: const Icon(Icons.eco, color: Color(0xFF059669)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -815,8 +832,12 @@ class _KrokiScreenState extends State<KrokiScreen> {
             onPressed: () {
               if (nameCtrl.text.trim().isEmpty) return;
               setState(() {
-                _parseller
-                    .add(_ParselData(ad: nameCtrl.text.trim()));
+                _parseller.add(_ParselData(
+                  ad: nameCtrl.text.trim(),
+                  cins: cinsCtrl.text.trim().isNotEmpty
+                      ? cinsCtrl.text.trim()
+                      : null,
+                ));
                 _activeParselIdx = _parseller.length - 1;
               });
               Navigator.pop(ctx);
@@ -876,16 +897,24 @@ class _KrokiScreenState extends State<KrokiScreen> {
         // Canvas
         Expanded(
           flex: 3,
-          child: Container(
-            color: Colors.grey.shade50,
-            child: CustomPaint(
-              painter: _SiraPainter(
-                bahcePoints: _bahcePoints,
-                parseller: _parseller,
-                activeParselIdx: _siraParselIdx,
-                pxPerMetre: _calcGlobalPxPerMetre(),
+          child: InteractiveViewer(
+            transformationController: _zoomCtrl,
+            minScale: 0.3,
+            maxScale: 5.0,
+            boundaryMargin: const EdgeInsets.all(300),
+            child: Container(
+              width: 2000,
+              height: 2000,
+              color: Colors.grey.shade50,
+              child: CustomPaint(
+                painter: _SiraPainter(
+                  bahcePoints: _bahcePoints,
+                  parseller: _parseller,
+                  activeParselIdx: _siraParselIdx,
+                  pxPerMetre: _calcGlobalPxPerMetre(),
+                ),
+                size: const Size(2000, 2000),
               ),
-              size: Size.infinite,
             ),
           ),
         ),
@@ -1034,18 +1063,20 @@ class _KrokiScreenState extends State<KrokiScreen> {
         text: value > 0 ? value.toStringAsFixed(2) : '');
     return TextField(
       controller: ctrl,
-      keyboardType:
-          const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       decoration: InputDecoration(
         labelText: label,
         suffixText: 'm',
+        hintText: '0,50',
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10)),
       ),
-      onChanged: (v) =>
-          onChanged(double.tryParse(v.replaceAll(',', '.')) ?? 0),
+      onChanged: (v) {
+        final parsed = double.tryParse(v.replaceAll(',', '.'));
+        if (parsed != null) onChanged(parsed);
+      },
     );
   }
 
@@ -1169,25 +1200,33 @@ class _KrokiScreenState extends State<KrokiScreen> {
   // 4) ÖNİZLEME
   // ═══════════════════════════════════════════════════════
   Widget _buildOnizlemeView() {
-    return Container(
-      color: Colors.grey.shade50,
-      child: CustomPaint(
-        painter: _OnizlemePainter(
-          bahcePoints: _bahcePoints,
-          parseller: _parseller,
-          pxPerMetre: _calcGlobalPxPerMetre(),
-          bahceMetreler: _bahceMetreler,
+    return InteractiveViewer(
+      transformationController: _zoomCtrl,
+      minScale: 0.3,
+      maxScale: 5.0,
+      boundaryMargin: const EdgeInsets.all(300),
+      child: Container(
+        width: 2000,
+        height: 2000,
+        color: Colors.grey.shade50,
+        child: CustomPaint(
+          painter: _OnizlemePainter(
+            bahcePoints: _bahcePoints,
+            parseller: _parseller,
+            pxPerMetre: _calcGlobalPxPerMetre(),
+            bahceMetreler: _bahceMetreler,
+          ),
+          size: const Size(2000, 2000),
+          child: _bahcePoints.isEmpty
+              ? Center(
+                  child: Text(
+                    'Henüz kroki çizilmedi',
+                    style: TextStyle(
+                        color: Colors.grey.shade400, fontSize: 15),
+                  ),
+                )
+              : null,
         ),
-        size: Size.infinite,
-        child: _bahcePoints.isEmpty
-            ? Center(
-                child: Text(
-                  'Henüz kroki çizilmedi',
-                  style: TextStyle(
-                      color: Colors.grey.shade400, fontSize: 15),
-                ),
-              )
-            : null,
       ),
     );
   }
@@ -1334,15 +1373,18 @@ class _KrokiScreenState extends State<KrokiScreen> {
       // Parseller
       final parseller = <Parsel>[];
       for (final p in _parseller) {
+        final parselPxPerMetre = _calcParselPxPerMetre(p);
         final parselKoseler = _buildKoselerFromPoints(
-            p.points, p.metreler, pxPerMetre);
+            p.points, p.metreler, parselPxPerMetre > 0 ? parselPxPerMetre : pxPerMetre);
+        // Sıra cinsini parsel cinsinden ata
+        final siralarWithCins = p.siralar.map((s) => s.copyWith(cins: s.cins ?? p.cins)).toList();
         parseller.add(Parsel(
           ad: p.ad,
           siraSayisi: p.siralar.length,
           siraBasinaSaksi:
               p.siralar.isNotEmpty ? p.siralar.first.saksiSayisi : 0,
           cins: p.cins,
-          siralar: p.siralar,
+          siralar: siralarWithCins,
           koseler: parselKoseler,
           siraAraligi: p.siraAraligi,
           saksiAraligi: p.saksiAraligi,

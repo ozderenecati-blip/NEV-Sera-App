@@ -157,7 +157,7 @@ class _BahceYonetimiScreenState extends State<BahceYonetimiScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                          child: Text(p.cins!, style: const TextStyle(fontSize: 11, color: Color(0xFF059669))),
+                          child: Text(p.cins!, style: const TextStyle(fontSize: 13, color: Color(0xFF059669))),
                         ),
                       ],
                     ],

@@ -107,7 +107,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 child: Text(
                   'Pasif',
-                  style: TextStyle(fontSize: 10, color: Colors.red.shade700),
+                  style: TextStyle(fontSize: 12, color: Colors.red.shade700),
                 ),
               ),
           ],
@@ -131,7 +131,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 user.rolLabel,
                 style: TextStyle(
                   color: roleColor,
-                  fontSize: 11,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),

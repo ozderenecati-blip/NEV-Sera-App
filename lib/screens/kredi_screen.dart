@@ -193,7 +193,7 @@ class KrediScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+          Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
           const SizedBox(height: 2),
           Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
         ],

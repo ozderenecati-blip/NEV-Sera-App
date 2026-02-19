@@ -119,7 +119,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                       ),
                       child: Text(
                         rapor.onaylandi ? '✓ Onaylı' : 'Beklemede',
-                        style: TextStyle(fontSize: 11, color: rapor.onaylandi ? Colors.green : Colors.orange, fontWeight: FontWeight.w600),
+                        style: TextStyle(fontSize: 13, color: rapor.onaylandi ? Colors.green : Colors.orange, fontWeight: FontWeight.w600),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -141,7 +141,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                         decoration: BoxDecoration(color: const Color(0xFF059669).withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                        child: Text(is_.kategori!, style: const TextStyle(fontSize: 10, color: Color(0xFF059669))),
+                        child: Text(is_.kategori!, style: const TextStyle(fontSize: 12, color: Color(0xFF059669))),
                       ),
                   ]),
                 )),
@@ -351,7 +351,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-      child: Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+      child: Text(text, style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w500)),
     );
   }
 
@@ -388,7 +388,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                 leading: CircleAvatar(radius: 14, backgroundColor: const Color(0xFFD97706).withOpacity(0.1),
                     child: Text('${entry.key + 1}', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706)))),
                 title: Text(entry.value.aciklama, style: const TextStyle(fontSize: 14)),
-                subtitle: entry.value.kategori != null ? Text(entry.value.kategori!, style: const TextStyle(fontSize: 11)) : null,
+                subtitle: entry.value.kategori != null ? Text(entry.value.kategori!, style: const TextStyle(fontSize: 13)) : null,
                 trailing: IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red, size: 20),
                     onPressed: () => setDialogState(() => isler.removeAt(entry.key))),
               )),

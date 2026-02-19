@@ -133,7 +133,7 @@ class _RaporlarScreenState extends State<RaporlarScreen> with SingleTickerProvid
                                     padding: const EdgeInsets.only(top: 8),
                                     child: Text(
                                       _getAyKisa(value.toInt()),
-                                      style: const TextStyle(fontSize: 10),
+                                      style: const TextStyle(fontSize: 11),
                                     ),
                                   );
                                 },
@@ -147,7 +147,7 @@ class _RaporlarScreenState extends State<RaporlarScreen> with SingleTickerProvid
                                   if (value == 0) return const Text('');
                                   return Text(
                                     _formatCompact(value),
-                                    style: const TextStyle(fontSize: 10),
+                                    style: const TextStyle(fontSize: 11),
                                   );
                                 },
                               ),

@@ -97,7 +97,7 @@ class ModuleSelectionScreen extends StatelessWidget {
                     user.rolLabel,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

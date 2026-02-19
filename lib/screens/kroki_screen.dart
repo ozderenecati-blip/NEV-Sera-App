@@ -330,7 +330,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                     Text(
                       items[i].$1,
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: isActive
                             ? Colors.white
@@ -449,7 +449,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
           text: 'Toplam: ${bahceAlan.toStringAsFixed(1)} m²  •  $parselInfo',
           style: TextStyle(
             color: Colors.grey.shade700,
-            fontSize: 11,
+            fontSize: 13,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -688,7 +688,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                           child: Text(
                             '📍${gpsDist.toStringAsFixed(1)}m',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 13,
                               color: Colors.blue,
                               fontWeight: FontWeight.w500,
                             ),
@@ -714,7 +714,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                             (i < _gpsPositions.length && _gpsPositions[i] != null)
                                 ? 'GPS ✓'
                                 : 'GPS',
-                            style: const TextStyle(fontSize: 11),
+                            style: const TextStyle(fontSize: 13),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: (i < _gpsPositions.length && _gpsPositions[i] != null)
@@ -757,7 +757,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                         children: [
                           Text(e.value.ad, style: const TextStyle(fontSize: 12)),
                           if (e.value.cins != null && e.value.cins!.isNotEmpty)
-                            Text(e.value.cins!, style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+                            Text(e.value.cins!, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                         ],
                       ),
                       selected: _activeParselIdx == e.key,
@@ -905,7 +905,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                           ),
                           child: Text(
                             '${_calcParselAlan(_parseller[_activeParselIdx]).toStringAsFixed(1)} m²',
-                            style: const TextStyle(fontSize: 11, color: Color(0xFF059669), fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 13, color: Color(0xFF059669), fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -1167,7 +1167,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                   ),
                   child: Text(
                     '${_calcParselAlan(p).toStringAsFixed(1)} m²',
-                    style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 13, color: Colors.purple, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1206,7 +1206,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                 final kj = (ki + 1) % p.points.length;
                 final selected = p.seciliKenarIdx == ki;
                 return ChoiceChip(
-                  label: Text('Kenar ${ki + 1}→${kj + 1}', style: const TextStyle(fontSize: 11)),
+                  label: Text('Kenar ${ki + 1}→${kj + 1}', style: const TextStyle(fontSize: 13)),
                   selected: selected,
                   selectedColor: Colors.purple.withOpacity(0.25),
                   avatar: selected ? const Icon(Icons.check, size: 14, color: Colors.purple) : null,

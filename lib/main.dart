@@ -103,6 +103,16 @@ class NevSeracilikApp extends StatelessWidget {
             theme: ThemeProvider.lightTheme,
             darkTheme: ThemeProvider.darkTheme,
             home: _getInitialScreen(),
+            builder: (context, child) {
+              // Mobil web-app deneyimi için minimum text scale
+              final mediaQuery = MediaQuery.of(context);
+              return MediaQuery(
+                data: mediaQuery.copyWith(
+                  textScaler: const TextScaler.linear(1.05),
+                ),
+                child: child!,
+              );
+            },
           );
         },
       ),

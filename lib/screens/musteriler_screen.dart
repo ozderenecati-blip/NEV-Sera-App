@@ -371,7 +371,7 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
               Text(
                 bakiye >= 0 ? 'Alacak' : 'Borç',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   color: bakiye >= 0 ? Colors.orange : Colors.green,
                 ),
               ),
@@ -425,7 +425,7 @@ class _MusterilerScreenState extends State<MusterilerScreen> with SingleTickerPr
             children: [
               Text(
                 DateFormat('dd.MM.yyyy').format(satis.tarih),
-                style: const TextStyle(fontSize: 11),
+                style: const TextStyle(fontSize: 13),
               ),
               Text(
                 _currencyFormat.format(satis.toplamTutar),

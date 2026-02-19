@@ -606,7 +606,7 @@ class _KasaScreenState extends State<KasaScreen> {
                               child: Text(
                                 h.islemKaynagiLabel,
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 12,
                                   color: _getKaynagiColor(h.islemKaynagi ?? ''),
                                 ),
                               ),
@@ -659,7 +659,7 @@ class _KasaScreenState extends State<KasaScreen> {
                             Text(
                               h.odemeBicimiLabel,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 13,
                                 color: Colors.grey.shade600,
                               ),
                             ),
@@ -683,7 +683,7 @@ class _KasaScreenState extends State<KasaScreen> {
                       Text(
                         '≈ ${tlFmt.format(h.tlKarsiligi)}',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 13,
                           color: Colors.grey.shade600,
                         ),
                       ),

@@ -159,7 +159,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(color: durumColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                    child: Text(gorev.durumLabel, style: TextStyle(fontSize: 11, color: durumColor, fontWeight: FontWeight.w600)),
+                    child: Text(gorev.durumLabel, style: TextStyle(fontSize: 13, color: durumColor, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
@@ -191,7 +191,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
-        Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+        Text(text, style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w500)),
       ]),
     );
   }
@@ -256,7 +256,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
         const SizedBox(height: 2),
         Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
       ]),

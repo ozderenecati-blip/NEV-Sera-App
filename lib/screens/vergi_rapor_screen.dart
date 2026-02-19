@@ -291,7 +291,7 @@ class _VergiRaporScreenState extends State<VergiRaporScreen> with SingleTickerPr
                     Text(_currencyFormat.format(h.tutar)),
                     Text(
                       'Stopaj: ${_currencyFormat.format(h.tutar * 0.10)}',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                     ),
                   ],
                 ),

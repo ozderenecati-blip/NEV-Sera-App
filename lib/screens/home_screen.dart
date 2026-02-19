@@ -376,13 +376,13 @@ class DashboardTab extends StatelessWidget {
                   Text(
                     odeme.aciklama!,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 13,
                       color: textColor.withOpacity(0.8),
                     ),
                   ),
                 Text(
                   odeme.vadeDurumu,
-                  style: TextStyle(fontSize: 11, color: textColor),
+                  style: TextStyle(fontSize: 13, color: textColor),
                 ),
               ],
             ),

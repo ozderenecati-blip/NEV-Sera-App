@@ -273,7 +273,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                         children: [
                           Text(
                             'Kalan Borç',
-                            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                           ),
                           Text(
                             '₺${_numberFormat.format(ortak.kalanBorc)}',
@@ -322,7 +322,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                           Flexible(
                             child: Text(
                               'Bu ortağa kasa atanmamış. Ayarlar > Kasalar\'dan atayabilirsiniz.',
-                              style: TextStyle(fontSize: 11, color: Colors.orange[800]),
+                              style: TextStyle(fontSize: 13, color: Colors.orange[800]),
                             ),
                           ),
                         ],
@@ -1219,7 +1219,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                         children: [
                           const Icon(Icons.arrow_downward, color: Colors.green, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Avans', style: TextStyle(fontSize: 11)),
+                          const Text('Avans', style: TextStyle(fontSize: 13)),
                           Text('₺${_numberFormat.format(toplamAvans)}', 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 12)),
                         ],
@@ -1238,7 +1238,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                         children: [
                           const Icon(Icons.arrow_upward, color: Colors.orange, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Geri Ödeme', style: TextStyle(fontSize: 11)),
+                          const Text('Geri Ödeme', style: TextStyle(fontSize: 13)),
                           Text('₺${_numberFormat.format(toplamGeriOdeme)}', 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 12)),
                         ],
@@ -1257,7 +1257,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                         children: [
                           const Icon(Icons.receipt, color: Colors.purple, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Stopaj', style: TextStyle(fontSize: 11)),
+                          const Text('Stopaj', style: TextStyle(fontSize: 13)),
                           Text('₺${_numberFormat.format(toplamStopaj)}', 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple, fontSize: 12)),
                         ],
@@ -1346,7 +1346,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                                   Text(h.aciklama, style: const TextStyle(fontSize: 12)),
                                 Text(
                                   '${DateFormat('dd.MM.yyyy').format(h.tarih)} • ${h.kasa ?? "Kayıt"} • ${h.paraBirimi}',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                                 ),
                               ],
                             ),
@@ -1361,7 +1361,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                                 if (h.tlKarsiligi != null && h.paraBirimi != 'TL')
                                   Text(
                                     '≈ ₺${_numberFormat.format(h.tlKarsiligi)}',
-                                    style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                                   ),
                               ],
                             ),

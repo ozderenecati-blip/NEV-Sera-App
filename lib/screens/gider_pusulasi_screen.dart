@@ -293,7 +293,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                           title: Text(h.aciklama, style: const TextStyle(fontSize: 13)),
                           subtitle: Text(
                             '${DateFormat('dd.MM.yyyy').format(h.tarih)} • ${h.kasa ?? "Kayıt"}',
-                            style: const TextStyle(fontSize: 11),
+                            style: const TextStyle(fontSize: 13),
                           ),
                           trailing: Text(
                             fmt.format(h.tlKarsiligi ?? h.tutar),
@@ -446,7 +446,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                           style: TextStyle(fontSize: 12, color: Colors.blue.shade700)),
                         const SizedBox(height: 4),
                         Text('Bu borç daha önce avans olarak ödenmiştir.', 
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
                       ],
                     ),
                   ),
@@ -490,7 +490,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                           ),
                           child: Column(
                             children: [
-                              const Text('Ödenecek Vergi', style: TextStyle(fontSize: 11)),
+                              const Text('Ödenecek Vergi', style: TextStyle(fontSize: 13)),
                               Text(
                                 currencyFormat.format(hesaplananVergi),
                                 style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
@@ -703,7 +703,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                         children: [
                           const Icon(Icons.money_off, color: Colors.red, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Avans', style: TextStyle(fontSize: 11)),
+                          const Text('Avans', style: TextStyle(fontSize: 13)),
                           Text(currencyFormat.format(toplamAvans), 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
                         ],
@@ -722,7 +722,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                         children: [
                           const Icon(Icons.receipt, color: Colors.purple, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Pusula', style: TextStyle(fontSize: 11)),
+                          const Text('Pusula', style: TextStyle(fontSize: 13)),
                           Text(currencyFormat.format(toplamResmilestirme), 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple, fontSize: 12)),
                         ],
@@ -741,7 +741,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                         children: [
                           const Icon(Icons.account_balance, color: Colors.orange, size: 20),
                           const SizedBox(height: 4),
-                          const Text('Vergi', style: TextStyle(fontSize: 11)),
+                          const Text('Vergi', style: TextStyle(fontSize: 13)),
                           Text(currencyFormat.format(toplamVergi), 
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 12)),
                         ],
@@ -826,7 +826,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                                 Text(h.aciklama, style: const TextStyle(fontSize: 12)),
                                 Text(
                                   '${DateFormat('dd.MM.yyyy').format(h.tarih)} • ${h.kasa ?? "Kayıt"}',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                                 ),
                               ],
                             ),

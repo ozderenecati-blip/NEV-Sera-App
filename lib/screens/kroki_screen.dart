@@ -154,6 +154,62 @@ class _KrokiScreenState extends State<KrokiScreen> {
     setState(() => _gpsLoading = false);
   }
 
+  Future<void> _getParselGpsPosition(int parselIdx, int pointIdx) async {
+    if (parselIdx < 0 || parselIdx >= _parseller.length) return;
+    setState(() => _gpsLoading = true);
+    try {
+      final pos = await getCurrentGpsPosition();
+      final p = _parseller[parselIdx];
+
+      while (p.gpsPositions.length <= pointIdx) {
+        p.gpsPositions.add(null);
+      }
+      p.gpsPositions[pointIdx] = pos;
+
+      // GPS mesafesini metre alanına yaz (varsa önceki köşeye mesafe)
+      if (pointIdx > 0 && p.gpsPositions[pointIdx - 1] != null) {
+        final prev = p.gpsPositions[pointIdx - 1]!;
+        final dist = gpsDistanceBetween(
+          prev.latitude, prev.longitude,
+          pos.latitude, pos.longitude,
+        );
+        if (pointIdx - 1 < p.metreler.length) {
+          p.metreler[pointIdx - 1] = dist;
+          p.initMetreCtrl();
+        }
+      }
+      // Kapanış (son→ilk)
+      if (pointIdx == p.points.length - 1 &&
+          p.points.length >= 3 &&
+          p.gpsPositions.isNotEmpty &&
+          p.gpsPositions[0] != null) {
+        final first = p.gpsPositions[0]!;
+        final dist = gpsDistanceBetween(
+          pos.latitude, pos.longitude,
+          first.latitude, first.longitude,
+        );
+        if (pointIdx < p.metreler.length) {
+          p.metreler[pointIdx] = dist;
+          p.initMetreCtrl();
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('📍 Parsel GPS alındı: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('GPS hatası: $e')));
+      }
+    }
+    setState(() => _gpsLoading = false);
+  }
+
   // ─── Mevcut köşeleri piksel'e yükle ───
   void _loadBahcePointsFromModel() {
     final koseler = widget.bahce.koseler;
@@ -570,6 +626,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                   painter: _BahceSinirPainter(
                     points: _bahcePoints,
                     dragging: _draggingBahceIdx,
+                    metreler: _bahceMetreler,
                   ),
                   size: const Size(2000, 2000),
                   child: _bahcePoints.isEmpty
@@ -991,6 +1048,34 @@ class _KrokiScreenState extends State<KrokiScreen> {
                                             0;
                                     _rescaleParselPoints(_activeParselIdx);
                                   },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            SizedBox(
+                              height: 36,
+                              child: ElevatedButton.icon(
+                                onPressed: _gpsLoading
+                                    ? null
+                                    : () => _getParselGpsPosition(_activeParselIdx, i),
+                                icon: Icon(
+                                  (i < p.gpsPositions.length && p.gpsPositions[i] != null)
+                                      ? Icons.gps_fixed
+                                      : Icons.gps_not_fixed,
+                                  size: 14,
+                                ),
+                                label: Text(
+                                  (i < p.gpsPositions.length && p.gpsPositions[i] != null)
+                                      ? '✓'
+                                      : 'GPS',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: (i < p.gpsPositions.length && p.gpsPositions[i] != null)
+                                      ? Colors.green
+                                      : const Color(0xFF059669),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
                                 ),
                               ),
                             ),
@@ -1624,6 +1709,39 @@ class _KrokiScreenState extends State<KrokiScreen> {
                 style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.red)),
               ),
+            // GPS ile nokta ekle (bahçe)
+            if (_mod == KrokiModu.bahceSiniri) ...[
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _gpsLoading
+                    ? null
+                    : () async {
+                        // Canvas merkezine bir nokta ekle, sonra GPS konumunu al
+                        final center = Offset(
+                          _canvasSize.width / 2 + (_bahcePoints.length * 40),
+                          _canvasSize.height / 2 + (_bahcePoints.length * 30),
+                        );
+                        setState(() {
+                          _bahcePoints.add(center);
+                          _bahceMetreler.add(0);
+                          _gpsPositions.add(null);
+                          _gpsDistances.add(null);
+                          _initBahceMetreCtrl();
+                        });
+                        await _getGpsPosition(_bahcePoints.length - 1);
+                      },
+                icon: Icon(
+                  _gpsLoading ? Icons.hourglass_top : Icons.add_location_alt,
+                  size: 16,
+                ),
+                label: const Text('GPS Nokta', style: TextStyle(fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+            ],
             if (_mod == KrokiModu.parselCizim &&
                 _activeParselIdx >= 0 &&
                 _activeParselIdx < _parseller.length &&
@@ -1645,6 +1763,39 @@ class _KrokiScreenState extends State<KrokiScreen> {
                 style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.red)),
               ),
+            // GPS ile nokta ekle (parsel)
+            if (_mod == KrokiModu.parselCizim &&
+                _activeParselIdx >= 0 &&
+                _activeParselIdx < _parseller.length) ...[
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _gpsLoading
+                    ? null
+                    : () async {
+                        final p = _parseller[_activeParselIdx];
+                        final center = Offset(
+                          _canvasSize.width / 2 + (p.points.length * 40),
+                          _canvasSize.height / 2 + (p.points.length * 30),
+                        );
+                        setState(() {
+                          p.points.add(center);
+                          p.metreler.add(0);
+                          p.initMetreCtrl();
+                        });
+                        await _getParselGpsPosition(_activeParselIdx, p.points.length - 1);
+                      },
+                icon: Icon(
+                  _gpsLoading ? Icons.hourglass_top : Icons.add_location_alt,
+                  size: 16,
+                ),
+                label: const Text('GPS Nokta', style: TextStyle(fontSize: 11)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF059669),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+            ],
             const Spacer(),
             // Bilgi
             if (_mod == KrokiModu.bahceSiniri)
@@ -1832,6 +1983,7 @@ class _ParselData {
   List<Offset> points = [];
   List<double> metreler = [];
   List<TextEditingController> metreCtrl = [];
+  List<GpsKonum?> gpsPositions = [];
   double siraAraligi;
   double saksiAraligi;
   double? siraAcisi;
@@ -1869,7 +2021,8 @@ class _ParselData {
 class _BahceSinirPainter extends CustomPainter {
   final List<Offset> points;
   final int? dragging;
-  _BahceSinirPainter({required this.points, this.dragging});
+  final List<double> metreler;
+  _BahceSinirPainter({required this.points, this.dragging, this.metreler = const []});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1929,6 +2082,45 @@ class _BahceSinirPainter extends CustomPainter {
       canvas.drawCircle(points[i], 4, Paint()..color = Colors.red);
       _drawLabel(
           canvas, points[i] + Offset(r + 4, -14), '${i + 1}', Colors.red);
+    }
+
+    // Kenar metre etiketleri
+    if (points.length >= 2) {
+      for (int i = 0; i < points.length; i++) {
+        final j = (i + 1) % points.length;
+        if (j == 0 && points.length < 3) continue;
+        final mid = (points[i] + points[j]) / 2;
+        // piksel uzunluk
+        final pxDist = (points[j] - points[i]).distance;
+        final metre = i < metreler.length && metreler[i] > 0
+            ? metreler[i]
+            : 0.0;
+        final label = metre > 0
+            ? '${metre.toStringAsFixed(1)}m'
+            : '${pxDist.toStringAsFixed(0)}px';
+        final bg = Paint()..color = Colors.white.withOpacity(0.9);
+        final tp = TextPainter(
+          text: TextSpan(
+              text: label,
+              style: TextStyle(
+                  color: metre > 0 ? Colors.red : Colors.grey,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+                center: mid,
+                width: tp.width + 8,
+                height: tp.height + 4),
+            const Radius.circular(4),
+          ),
+          bg,
+        );
+        tp.paint(canvas,
+            Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2));
+      }
     }
   }
 
@@ -2057,13 +2249,18 @@ class _ParselCizimPainter extends CustomPainter {
         }
       }
 
-      // Kenar etiketleri (kenar ortasında)
+      // Kenar etiketleri (kenar ortasında) — metre dahil
       if (isActive && p.points.length >= 2) {
         for (int ki = 0; ki < p.points.length; ki++) {
           final kj = (ki + 1) % p.points.length;
           if (kj == 0 && p.points.length < 3) continue;
           final mid = (p.points[ki] + p.points[kj]) / 2;
-          final label = '${ki + 1}→${kj + 1}';
+          final metre = ki < p.metreler.length && p.metreler[ki] > 0
+              ? p.metreler[ki]
+              : 0.0;
+          final label = metre > 0
+              ? '${ki + 1}→${kj + 1} ${metre.toStringAsFixed(1)}m'
+              : '${ki + 1}→${kj + 1}';
           final tp = TextPainter(
             text: TextSpan(
                 text: label,

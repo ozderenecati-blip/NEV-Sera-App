@@ -4,10 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ThemeProvider extends ChangeNotifier {
   static const String _themeKey = 'theme_mode';
+  static const String _textScaleKey = 'text_scale';
   
   ThemeMode _themeMode = ThemeMode.system;
+  double _textScale = 1.0;
   
   ThemeMode get themeMode => _themeMode;
+  double get textScale => _textScale;
   
   bool get isDark => _themeMode == ThemeMode.dark;
   bool get isLight => _themeMode == ThemeMode.light;
@@ -20,6 +23,7 @@ class ThemeProvider extends ChangeNotifier {
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
     final themeName = prefs.getString(_themeKey) ?? 'system';
+    _textScale = prefs.getDouble(_textScaleKey) ?? 1.0;
     
     switch (themeName) {
       case 'dark':
@@ -51,6 +55,13 @@ class ThemeProvider extends ChangeNotifier {
         themeName = 'system';
     }
     await prefs.setString(_themeKey, themeName);
+  }
+  
+  Future<void> setTextScale(double scale) async {
+    _textScale = scale.clamp(0.8, 1.3);
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_textScaleKey, _textScale);
   }
   
   void toggleTheme() {

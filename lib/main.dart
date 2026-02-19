@@ -104,11 +104,11 @@ class NevSeracilikApp extends StatelessWidget {
             darkTheme: ThemeProvider.darkTheme,
             home: _getInitialScreen(),
             builder: (context, child) {
-              // Mobil web-app deneyimi için minimum text scale
+              // Kullanıcı ayarlanabilir text scale
               final mediaQuery = MediaQuery.of(context);
               return MediaQuery(
                 data: mediaQuery.copyWith(
-                  textScaler: const TextScaler.linear(1.05),
+                  textScaler: TextScaler.linear(themeProvider.textScale),
                 ),
                 child: child!,
               );

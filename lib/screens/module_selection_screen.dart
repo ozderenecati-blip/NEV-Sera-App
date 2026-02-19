@@ -13,6 +13,134 @@ import 'user_management_screen.dart';
 class ModuleSelectionScreen extends StatelessWidget {
   const ModuleSelectionScreen({super.key});
 
+  void _showSettingsSheet(BuildContext context) {
+    final themeProvider = context.read<ThemeProvider>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40, height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.settings, color: ThemeProvider.primaryColor),
+                    SizedBox(width: 10),
+                    Text('Ayarlar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                // Tema seçimi
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Tema', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _buildThemeChip(ctx, themeProvider, ThemeMode.light, 'Açık', Icons.light_mode, setModalState),
+                    const SizedBox(width: 8),
+                    _buildThemeChip(ctx, themeProvider, ThemeMode.dark, 'Koyu', Icons.dark_mode, setModalState),
+                    const SizedBox(width: 8),
+                    _buildThemeChip(ctx, themeProvider, ThemeMode.system, 'Sistem', Icons.settings_suggest, setModalState),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                // Yazı boyutu
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Yazı Boyutu: ${(themeProvider.textScale * 100).round()}%',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Text('A', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    Expanded(
+                      child: Slider(
+                        value: themeProvider.textScale,
+                        min: 0.8,
+                        max: 1.3,
+                        divisions: 10,
+                        activeColor: ThemeProvider.primaryColor,
+                        label: '${(themeProvider.textScale * 100).round()}%',
+                        onChanged: (v) {
+                          themeProvider.setTextScale(v);
+                          setModalState(() {});
+                        },
+                      ),
+                    ),
+                    const Text('A', style: TextStyle(fontSize: 20, color: Colors.grey)),
+                  ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    'Örnek metin — Bu yazının boyutunu ayarlayabilirsiniz',
+                    style: TextStyle(fontSize: 14 * themeProvider.textScale, color: Colors.grey.shade700),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildThemeChip(BuildContext context, ThemeProvider provider, ThemeMode mode, String label, IconData icon, StateSetter setModalState) {
+    final selected = provider.themeMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          provider.setTheme(mode);
+          setModalState(() {});
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? ThemeProvider.primaryColor.withOpacity(0.1) : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? ThemeProvider.primaryColor : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: selected ? ThemeProvider.primaryColor : Colors.grey.shade500, size: 22),
+              const SizedBox(height: 4),
+              Text(label, style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                color: selected ? ThemeProvider.primaryColor : Colors.grey.shade600,
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -104,6 +232,11 @@ class ModuleSelectionScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            onPressed: () => _showSettingsSheet(context),
+            icon: const Icon(Icons.settings, color: Colors.white),
+            tooltip: 'Ayarlar',
           ),
           IconButton(
             onPressed: () async {

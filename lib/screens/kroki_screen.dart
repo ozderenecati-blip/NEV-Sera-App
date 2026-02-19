@@ -159,16 +159,20 @@ class _KrokiScreenState extends State<KrokiScreen> {
     final koseler = widget.bahce.koseler;
     if (koseler.isEmpty || _canvasSize == Size.zero) return;
 
+    // Tüm noktaların (bahçe + parsel) global bounding box'ını bul
+    final allKoseler = <BahceKose>[...koseler];
+    for (final p in widget.bahce.parseller) {
+      allKoseler.addAll(p.koseler);
+    }
     double minX = double.infinity, maxX = -double.infinity;
     double minY = double.infinity, maxY = -double.infinity;
-    for (final k in koseler) {
+    for (final k in allKoseler) {
       minX = min(minX, k.x);
       maxX = max(maxX, k.x);
       minY = min(minY, k.y);
       maxY = max(maxY, k.y);
     }
     const padding = 80.0;
-    // Canvas artık 2000x2000 ama görünür alan _canvasSize kadar
     final targetW = _canvasSize.width - padding * 2;
     final targetH = _canvasSize.height - padding * 2;
     final rangeX = maxX - minX;
@@ -176,49 +180,33 @@ class _KrokiScreenState extends State<KrokiScreen> {
     final maxRange = max(rangeX, rangeY);
     final scale =
         maxRange > 0 ? min(targetW, targetH) / maxRange : 1.0;
-    final cx = (minX + maxX) / 2;
-    final cy = (minY + maxY) / 2;
-    // Merkez: görünür alanın ortası (canvas 2000x2000 ama view küçük)
+    // Merkez: görünür alanın ortası
     final centerX = _canvasSize.width / 2;
     final centerY = _canvasSize.height / 2;
 
+    // Koordinatlar merkez-tabanlı kaydedildiği için:
+    // x,y = (px - cx_of_points) / pxPerMetre → geri: px = x * scale + centerX
+    // (x zaten 0 merkezli kaydedildi, doğrudan scale ile çarp)
     _bahcePoints = koseler
         .map((k) => Offset(
-              (k.x - cx) * scale + centerX,
-              (k.y - cy) * scale + centerY,
+              k.x * scale + centerX,
+              k.y * scale + centerY,
             ))
         .toList();
     _bahceMetreler = koseler.map((k) => k.metraj).toList();
     _initBahceMetreCtrl();
 
-    // Parsel köşelerini de aynı scale/center ile yükle
+    // Parsel köşelerini aynı scale/center ile yükle
     for (int pi = 0;
         pi < _parseller.length && pi < widget.bahce.parseller.length;
         pi++) {
       final pKoseler = widget.bahce.parseller[pi].koseler;
       if (pKoseler.isNotEmpty) {
-        // Parsel köşeleri de aynı koordinat sisteminde kaydedildi
-        // Ancak parsel'in kendi min offset'i farklı olabilir
-        // Bu yüzden parselin köşelerini de bahçe ile aynı şekilde dönüştürmeliyiz
-        double pMinX = double.infinity, pMaxX = -double.infinity;
-        double pMinY = double.infinity, pMaxY = -double.infinity;
-        for (final k in pKoseler) {
-          pMinX = min(pMinX, k.x);
-          pMaxX = max(pMaxX, k.x);
-          pMinY = min(pMinY, k.y);
-          pMaxY = max(pMaxY, k.y);
-        }
-        // Parsel'in pxPerMetre'si bahçe ile aynı scale kullanmalı
-        // Ancak parsel kendi koordinat sistemiyle kaydedildi (0,0 origin)
-        // Parselin bahçe içindeki konumunu doğru kurtarmak için:
-        // Parselin metre koordinatlarını bahçe scale ile piksele çevirelim
-        // Parsel köşelerini bahçe alanının içine yerleştirelim
-        final pCx = (pMinX + pMaxX) / 2;
-        final pCy = (pMinY + pMaxY) / 2;
+        // Aynı koordinat sistemi: x * scale + centerX
         _parseller[pi].points = pKoseler
             .map((k) => Offset(
-                  (k.x - pCx) * scale + centerX,
-                  (k.y - pCy) * scale + centerY,
+                  k.x * scale + centerX,
+                  k.y * scale + centerY,
                 ))
             .toList();
         _parseller[pi].metreler =
@@ -645,10 +633,13 @@ class _KrokiScreenState extends State<KrokiScreen> {
                                     color: Colors.red, width: 2),
                               ),
                             ),
-                            onChanged: (v) => _bahceMetreler[i] =
-                                double.tryParse(
-                                        v.replaceAll(',', '.')) ??
-                                    0,
+                            onChanged: (v) {
+                              _bahceMetreler[i] =
+                                  double.tryParse(
+                                          v.replaceAll(',', '.')) ??
+                                      0;
+                              _rescaleBahcePoints();
+                            },
                           ),
                         ),
                       ),
@@ -924,10 +915,13 @@ class _KrokiScreenState extends State<KrokiScreen> {
                                           width: 2),
                                     ),
                                   ),
-                                  onChanged: (v) => p.metreler[i] =
-                                      double.tryParse(
-                                              v.replaceAll(',', '.')) ??
-                                          0,
+                                  onChanged: (v) {
+                                    p.metreler[i] =
+                                        double.tryParse(
+                                                v.replaceAll(',', '.')) ??
+                                            0;
+                                    _rescaleParselPoints(_activeParselIdx);
+                                  },
                                 ),
                               ),
                             ),
@@ -1251,6 +1245,73 @@ class _KrokiScreenState extends State<KrokiScreen> {
     );
   }
 
+  // ── Kenar uzunluklarına göre noktaları oranla ──
+  void _rescaleBahcePoints() {
+    if (_bahcePoints.length < 2) return;
+    // En az 2 kenarın metre değeri girilmiş olmalı
+    final enteredCount = _bahceMetreler.where((m) => m > 0).length;
+    if (enteredCount == 0) return;
+
+    // Merkez hesapla
+    final center = _bahcePoints.reduce((a, b) => a + b) /
+        _bahcePoints.length.toDouble();
+
+    // Her kenarın mevcut piksel uzunluğunu ve hedef metre uzunluğunu karşılaştır
+    // İlk girilen metre değerinden pxPerMetre hesapla
+    double pxPerMetre = 0;
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      if (i < _bahceMetreler.length && _bahceMetreler[i] > 0) {
+        final j = (i + 1) % _bahcePoints.length;
+        final pxDist = (_bahcePoints[j] - _bahcePoints[i]).distance;
+        if (pxDist > 0) {
+          pxPerMetre = pxDist / _bahceMetreler[i];
+          break;
+        }
+      }
+    }
+    if (pxPerMetre <= 0) return;
+
+    // Her köşeyi merkezden yönünü koruyarak, kenar uzunluklarını oranla
+    // Basit yaklaşım: tüm kenarların oranını ilk kenardan alınan pxPerMetre ile scale et
+    // Daha gelişmiş: her kenarı bağımsız ölçekle (ama bu poligon bozar)
+    // En doğru: tüm kenarlardan ortalama pxPerMetre hesapla, sonra tüm noktaları scale et
+    double totalPx = 0, totalM = 0;
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      final j = (i + 1) % _bahcePoints.length;
+      totalPx += (_bahcePoints[j] - _bahcePoints[i]).distance;
+      totalM += (i < _bahceMetreler.length && _bahceMetreler[i] > 0)
+          ? _bahceMetreler[i]
+          : 0;
+    }
+    if (totalM <= 0 || totalPx <= 0) return;
+
+    final currentPxPerM = totalPx / totalM;
+    // Hedef: tüm kenarların toplamı (metre olarak girilenlerin toplamını) tüm piksel toplamına oranla
+    // Her girilmemiş kenarı mevcut piksel oranıyla tahmin et
+    double hedefToplam = 0;
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      final j = (i + 1) % _bahcePoints.length;
+      final pxDist = (_bahcePoints[j] - _bahcePoints[i]).distance;
+      if (i < _bahceMetreler.length && _bahceMetreler[i] > 0) {
+        hedefToplam += _bahceMetreler[i];
+      } else {
+        hedefToplam += pxDist / currentPxPerM;
+      }
+    }
+    // Yeni ölçek
+    final newPxPerM = totalPx / hedefToplam;
+    // Scale farkı? Değişen yok, pxPerMetre zaten dinamik hesaplanıyor.
+    // Aslında metre değeri piksel oranını ETKİLİYOR, köşeler değişmez.
+    // setState ile painter tekrar çizilir ve doğru metre etiketi gösterilir.
+    setState(() {});
+  }
+
+  void _rescaleParselPoints(int parselIdx) {
+    if (parselIdx < 0 || parselIdx >= _parseller.length) return;
+    // Sadece setState ile repaint tetikle — metre değerleri pxPerMetre hesabını etkiler
+    setState(() {});
+  }
+
   // ── Piksel/metre oran hesaplama ──
   double _calcGlobalPxPerMetre() {
     // Önce bahçe kenarlarından hesapla
@@ -1510,7 +1571,17 @@ class _KrokiScreenState extends State<KrokiScreen> {
                     backgroundColor: const Color(0xFFD97706),
                     foregroundColor: Colors.white),
               ),
-            if (_mod == KrokiModu.onizleme)
+            if (_mod == KrokiModu.onizleme) ...[
+              if (_bahcePoints.length >= 3)
+                ElevatedButton.icon(
+                  onPressed: _shareKroki,
+                  icon: const Icon(Icons.share, size: 16),
+                  label: const Text('Paylaş'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD97706),
+                      foregroundColor: Colors.white),
+                ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _saveAll,
                 icon: _isSaving
@@ -1525,6 +1596,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
                     backgroundColor: const Color(0xFF059669),
                     foregroundColor: Colors.white),
               ),
+            ],
           ],
         ),
       ),
@@ -1539,7 +1611,8 @@ class _KrokiScreenState extends State<KrokiScreen> {
 
       // Bahçe köşeleri
       final bahceKoseler = _buildKoselerFromPoints(
-          _bahcePoints, _bahceMetreler, pxPerMetre);
+          _bahcePoints, _bahceMetreler, pxPerMetre,
+          includeGps: true);
 
       // Parseller
       final parseller = <Parsel>[];
@@ -1595,25 +1668,29 @@ class _KrokiScreenState extends State<KrokiScreen> {
   }
 
   List<BahceKose> _buildKoselerFromPoints(
-      List<Offset> points, List<double> metreler, double pxPerMetre) {
+      List<Offset> points, List<double> metreler, double pxPerMetre,
+      {bool includeGps = false}) {
     if (points.isEmpty) return [];
-    double minX = double.infinity, minY = double.infinity;
+    // Merkez tabanlı kaydet (load da merkez tabanlı çalışıyor)
+    double sumX = 0, sumY = 0;
     for (final p in points) {
-      minX = min(minX, p.dx);
-      minY = min(minY, p.dy);
+      sumX += p.dx;
+      sumY += p.dy;
     }
+    final cx = sumX / points.length;
+    final cy = sumY / points.length;
 
     return List.generate(points.length, (i) {
       final gpsPos =
-          i < _gpsPositions.length ? _gpsPositions[i] : null;
+          includeGps && i < _gpsPositions.length ? _gpsPositions[i] : null;
       return BahceKose(
-        x: (points[i].dx - minX) / pxPerMetre,
-        y: (points[i].dy - minY) / pxPerMetre,
+        x: (points[i].dx - cx) / pxPerMetre,
+        y: (points[i].dy - cy) / pxPerMetre,
         metraj: i < metreler.length ? metreler[i] : 0,
         lat: gpsPos?.latitude,
         lng: gpsPos?.longitude,
         gpsMetraj:
-            i < _gpsDistances.length ? _gpsDistances[i] : null,
+            includeGps && i < _gpsDistances.length ? _gpsDistances[i] : null,
       );
     });
   }

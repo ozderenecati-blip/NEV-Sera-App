@@ -683,9 +683,8 @@ class _KrokiScreenState extends State<KrokiScreen> {
                   child: Row(
                     children: [
                       Container(
-                        width: 70,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
@@ -699,24 +698,30 @@ class _KrokiScreenState extends State<KrokiScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: SizedBox(
-                          height: 40,
+                          height: 44,
                           child: TextField(
                             controller: _bahceMetreCtrl[i],
                             keyboardType:
                                 const TextInputType.numberWithOptions(
                                     decimal: true),
+                            style: const TextStyle(fontSize: 14),
                             decoration: InputDecoration(
                               hintText: 'metre',
                               suffixText: 'm',
+                              isDense: true,
                               contentPadding:
                                   const EdgeInsets.symmetric(
-                                      horizontal: 10),
+                                      horizontal: 10, vertical: 10),
                               border: OutlineInputBorder(
                                   borderRadius:
                                       BorderRadius.circular(8)),
+                              enabledBorder: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: Colors.grey.shade300)),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(8),
                                 borderSide: const BorderSide(
@@ -754,31 +759,37 @@ class _KrokiScreenState extends State<KrokiScreen> {
                       ],
                       const SizedBox(width: 4),
                       SizedBox(
-                        height: 36,
-                        child: ElevatedButton.icon(
+                        height: 38,
+                        width: 68,
+                        child: ElevatedButton(
                           onPressed: _gpsLoading
                               ? null
                               : () => _getGpsPosition(i),
-                          icon: Icon(
-                            _gpsLoading
-                                ? Icons.hourglass_top
-                                : (i < _gpsPositions.length && _gpsPositions[i] != null)
-                                    ? Icons.gps_fixed
-                                    : Icons.gps_not_fixed,
-                            size: 16,
-                          ),
-                          label: Text(
-                            (i < _gpsPositions.length && _gpsPositions[i] != null)
-                                ? 'GPS ✓'
-                                : 'GPS',
-                            style: const TextStyle(fontSize: 13),
-                          ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: (i < _gpsPositions.length && _gpsPositions[i] != null)
                                 ? Colors.green
                                 : Colors.blue,
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            minimumSize: Size.zero,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                (i < _gpsPositions.length && _gpsPositions[i] != null)
+                                    ? Icons.gps_fixed
+                                    : Icons.gps_not_fixed,
+                                size: 14,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                (i < _gpsPositions.length && _gpsPositions[i] != null)
+                                    ? 'GPS✓'
+                                    : 'GPS',
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -997,9 +1008,8 @@ class _KrokiScreenState extends State<KrokiScreen> {
                         child: Row(
                           children: [
                             Container(
-                              width: 70,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 4),
+                                  horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF059669)
                                     .withOpacity(0.1),
@@ -1014,25 +1024,31 @@ class _KrokiScreenState extends State<KrokiScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Expanded(
                               child: SizedBox(
-                                height: 38,
+                                height: 44,
                                 child: TextField(
                                   controller: p.metreCtrl[i],
                                   keyboardType:
                                       const TextInputType
                                           .numberWithOptions(
                                           decimal: true),
+                                  style: const TextStyle(fontSize: 14),
                                   decoration: InputDecoration(
                                     hintText: 'metre',
                                     suffixText: 'm',
+                                    isDense: true,
                                     contentPadding:
                                         const EdgeInsets.symmetric(
-                                            horizontal: 10),
+                                            horizontal: 10, vertical: 10),
                                     border: OutlineInputBorder(
                                         borderRadius:
                                             BorderRadius.circular(8)),
+                                    enabledBorder: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        borderSide: BorderSide(color: Colors.grey.shade300)),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius:
                                           BorderRadius.circular(8),
@@ -1053,29 +1069,37 @@ class _KrokiScreenState extends State<KrokiScreen> {
                             ),
                             const SizedBox(width: 4),
                             SizedBox(
-                              height: 36,
-                              child: ElevatedButton.icon(
+                              height: 38,
+                              width: 60,
+                              child: ElevatedButton(
                                 onPressed: _gpsLoading
                                     ? null
                                     : () => _getParselGpsPosition(_activeParselIdx, i),
-                                icon: Icon(
-                                  (i < p.gpsPositions.length && p.gpsPositions[i] != null)
-                                      ? Icons.gps_fixed
-                                      : Icons.gps_not_fixed,
-                                  size: 14,
-                                ),
-                                label: Text(
-                                  (i < p.gpsPositions.length && p.gpsPositions[i] != null)
-                                      ? '✓'
-                                      : 'GPS',
-                                  style: const TextStyle(fontSize: 11),
-                                ),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: (i < p.gpsPositions.length && p.gpsPositions[i] != null)
                                       ? Colors.green
                                       : const Color(0xFF059669),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  minimumSize: Size.zero,
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      (i < p.gpsPositions.length && p.gpsPositions[i] != null)
+                                          ? Icons.gps_fixed
+                                          : Icons.gps_not_fixed,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      (i < p.gpsPositions.length && p.gpsPositions[i] != null)
+                                          ? '✓'
+                                          : 'GPS',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1383,14 +1407,19 @@ class _KrokiScreenState extends State<KrokiScreen> {
     return TextField(
       controller: ctrl,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      style: const TextStyle(fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         suffixText: 'm',
         hintText: '0,50',
+        isDense: true,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade300)),
       ),
       onChanged: (v) {
         final parsed = double.tryParse(v.replaceAll(',', '.'));

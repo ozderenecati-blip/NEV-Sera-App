@@ -1,8 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:geolocator/geolocator.dart';
 import '../models/bahce.dart';
+import '../services/gps_helper.dart';
 import '../services/operasyon_service.dart';
 
 // ═══════════════════════════════════════════════════════════
@@ -33,10 +33,9 @@ class _KrokiScreenState extends State<KrokiScreen> {
   List<TextEditingController> _bahceMetreCtrl = [];
 
   // ── GPS verileri ──
-  List<Position?> _gpsPositions = [];
+  List<GpsKonum?> _gpsPositions = [];
   List<double?> _gpsDistances = [];
   bool _gpsLoading = false;
-  bool _gpsAvailable = false;
 
   // ── Parseller ──
   List<_ParselData> _parseller = [];
@@ -93,25 +92,13 @@ class _KrokiScreenState extends State<KrokiScreen> {
   }
 
   Future<void> _checkGps() async {
-    try {
-      final perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        await Geolocator.requestPermission();
-      }
-      _gpsAvailable = await Geolocator.isLocationServiceEnabled();
-    } catch (_) {
-      _gpsAvailable = false;
-    }
-    if (mounted) setState(() {});
+    // GPS artık her zaman kullanılabilir — hata varsa buton'a basınca gösterilir
   }
 
   Future<void> _getGpsPosition(int index) async {
     setState(() => _gpsLoading = true);
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings:
-            const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      final pos = await getCurrentGpsPosition();
 
       while (_gpsPositions.length <= index) {
         _gpsPositions.add(null);
@@ -124,7 +111,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
       // GPS mesafesi: önceki köşeye
       if (index > 0 && _gpsPositions[index - 1] != null) {
         final prev = _gpsPositions[index - 1]!;
-        final dist = Geolocator.distanceBetween(
+        final dist = gpsDistanceBetween(
           prev.latitude,
           prev.longitude,
           pos.latitude,
@@ -138,13 +125,21 @@ class _KrokiScreenState extends State<KrokiScreen> {
           _gpsPositions.isNotEmpty &&
           _gpsPositions[0] != null) {
         final first = _gpsPositions[0]!;
-        final dist = Geolocator.distanceBetween(
+        final dist = gpsDistanceBetween(
           pos.latitude,
           pos.longitude,
           first.latitude,
           first.longitude,
         );
         _gpsDistances[index] = dist;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('📍 GPS alındı: ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ));
       }
     } catch (e) {
       if (mounted) {
@@ -407,17 +402,13 @@ class _KrokiScreenState extends State<KrokiScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _gpsAvailable
-                                ? Icons.gps_fixed
-                                : Icons.touch_app,
+                            Icons.gps_fixed,
                             size: 56,
                             color: const Color(0xFFD97706),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _gpsAvailable
-                                ? 'Köşeye tıklayın veya GPS ile işaretleyin'
-                                : 'Bahçenin köşelerine tıklayın',
+                            'Köşeye tıklayın veya GPS ile işaretleyin',
                             style: TextStyle(
                               fontSize: 15,
                               color: Colors.grey.shade600,

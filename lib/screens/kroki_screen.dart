@@ -1,6 +1,9 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/bahce.dart';
 import '../services/gps_helper.dart';
 import '../services/operasyon_service.dart';
@@ -251,6 +254,12 @@ class _KrokiScreenState extends State<KrokiScreen> {
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         actions: [
+          if (_bahcePoints.length >= 3)
+            IconButton(
+              onPressed: _shareKroki,
+              icon: const Icon(Icons.share),
+              tooltip: 'Krokiyi Paylaş',
+            ),
           if (_mod == KrokiModu.onizleme ||
               _parseller.any((p) => p.siralar.isNotEmpty))
             IconButton(
@@ -345,6 +354,136 @@ class _KrokiScreenState extends State<KrokiScreen> {
         }),
       ),
     );
+  }
+
+  /// Parsel alan hesabı (Shoelace formülü, piksel → m²)
+  double _calcParselAlan(_ParselData p) {
+    if (p.points.length < 3) return 0;
+    final pxPerM = _calcParselPxPerMetre(p);
+    if (pxPerM <= 0) return 0;
+    double area = 0;
+    for (int i = 0; i < p.points.length; i++) {
+      final j = (i + 1) % p.points.length;
+      area += p.points[i].dx * p.points[j].dy;
+      area -= p.points[j].dx * p.points[i].dy;
+    }
+    final pxArea = area.abs() / 2;
+    return pxArea / (pxPerM * pxPerM);
+  }
+
+  /// Bahçe toplam alan (piksel → m²)
+  double _calcBahceAlan() {
+    if (_bahcePoints.length < 3) return 0;
+    final pxPerM = _calcGlobalPxPerMetre();
+    if (pxPerM <= 0) return 0;
+    double area = 0;
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      final j = (i + 1) % _bahcePoints.length;
+      area += _bahcePoints[i].dx * _bahcePoints[j].dy;
+      area -= _bahcePoints[j].dx * _bahcePoints[i].dy;
+    }
+    return area.abs() / 2 / (pxPerM * pxPerM);
+  }
+
+  /// Krokiyi resim olarak paylaş
+  Future<void> _shareKroki() async {
+    try {
+      // Tüm noktaların bounding box'ını bul
+      final allPoints = <Offset>[..._bahcePoints];
+      for (final p in _parseller) {
+        allPoints.addAll(p.points);
+      }
+      if (allPoints.isEmpty) return;
+
+      double minX = double.infinity, maxX = -double.infinity;
+      double minY = double.infinity, maxY = -double.infinity;
+      for (final pt in allPoints) {
+        minX = min(minX, pt.dx);
+        maxX = max(maxX, pt.dx);
+        minY = min(minY, pt.dy);
+        maxY = max(maxY, pt.dy);
+      }
+
+      const margin = 60.0;
+      final w = (maxX - minX + margin * 2).clamp(400.0, 2000.0);
+      final h = (maxY - minY + margin * 2).clamp(400.0, 2000.0);
+
+      // Canvas'a çiz
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+
+      // Beyaz arka plan
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, h),
+        Paint()..color = Colors.white,
+      );
+
+      // Koordinatları kaydır
+      canvas.translate(-minX + margin, -minY + margin);
+
+      // Painter ile çiz
+      final painter = _OnizlemePainter(
+        bahcePoints: _bahcePoints,
+        parseller: _parseller,
+        pxPerMetre: _calcGlobalPxPerMetre(),
+        bahceMetreler: _bahceMetreler,
+      );
+      painter.paint(canvas, Size(w, h));
+
+      // Başlık ekle
+      canvas.translate(minX - margin, minY - margin);
+      final titleTp = TextPainter(
+        text: TextSpan(
+          text: '${widget.bahce.ad} — Kroki',
+          style: const TextStyle(
+            color: Colors.black87,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      titleTp.paint(canvas, const Offset(16, 12));
+
+      // Alan bilgisi
+      final bahceAlan = _calcBahceAlan();
+      final parselInfo = _parseller
+          .where((p) => p.points.length >= 3)
+          .map((p) => '${p.ad}: ${_calcParselAlan(p).toStringAsFixed(1)} m²')
+          .join(' | ');
+      final infoTp = TextPainter(
+        text: TextSpan(
+          text: 'Toplam: ${bahceAlan.toStringAsFixed(1)} m²  •  $parselInfo',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+            fontSize: 11,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      infoTp.paint(canvas, Offset(16, h - 24));
+
+      // Resme dönüştür
+      final picture = recorder.endRecording();
+      final img = await picture.toImage(w.toInt(), h.toInt());
+      final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+
+      final bytes = byteData.buffer.asUint8List();
+
+      // Paylaş
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile.fromData(bytes, mimeType: 'image/png', name: '${widget.bahce.ad}_kroki.png')],
+          text: '${widget.bahce.ad} — Kroki (${bahceAlan.toStringAsFixed(0)} m²)',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Paylaşma hatası: $e')));
+      }
+    }
   }
 
   // ─── BODY ───────────────────────────────────────────────
@@ -696,6 +835,20 @@ class _KrokiScreenState extends State<KrokiScreen> {
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF059669)),
                       ),
+                      if (_parseller[_activeParselIdx].points.length >= 3) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${_calcParselAlan(_parseller[_activeParselIdx]).toStringAsFixed(1)} m²',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF059669), fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
                       const Spacer(),
                       TextButton.icon(
                         onPressed: () => setState(() {
@@ -936,9 +1089,27 @@ class _KrokiScreenState extends State<KrokiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${p.ad} — Sıra Ayarları',
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 16)),
+          Row(
+            children: [
+              Text('${p.ad} — Sıra Ayarları',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+              if (p.points.length >= 3) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.purple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${_calcParselAlan(p).toStringAsFixed(1)} m²',
+                    style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ],
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -2009,27 +2180,59 @@ class _OnizlemePainter extends CustomPainter {
             ..strokeWidth = 2
             ..style = PaintingStyle.stroke);
 
-      // Parsel adı
+      // Parsel adı + alan
       final center = p.points.reduce((a, b) => a + b) /
           p.points.length.toDouble();
+
+      // Alan hesabı (piksel → m²)
+      double parselAlan = 0;
+      if (p.points.length >= 3) {
+        double totalPxP = 0, totalMP = 0;
+        for (int ei = 0; ei < p.points.length; ei++) {
+          final ej = (ei + 1) % p.points.length;
+          totalPxP += (p.points[ej] - p.points[ei]).distance;
+          totalMP += (ei < p.metreler.length) ? p.metreler[ei] : 0;
+        }
+        final pxPerM = totalMP > 0 ? totalPxP / totalMP : pxPerMetre;
+        if (pxPerM > 0) {
+          double areaSum = 0;
+          for (int ai = 0; ai < p.points.length; ai++) {
+            final aj = (ai + 1) % p.points.length;
+            areaSum += p.points[ai].dx * p.points[aj].dy;
+            areaSum -= p.points[aj].dx * p.points[ai].dy;
+          }
+          parselAlan = areaSum.abs() / 2 / (pxPerM * pxPerM);
+        }
+      }
+
+      // Cins + sıra özeti
+      final cinsText = p.cins != null ? ' (${p.cins})' : '';
+      final alanText = parselAlan > 0 ? '\n${parselAlan.toStringAsFixed(1)} m²' : '';
+      final siraText = p.siralar.isNotEmpty
+          ? '\n${p.siralar.length} sıra • ${p.siralar.fold<int>(0, (s, r) => s + r.saksiSayisi)} saksı'
+          : '';
+      final labelText = '${p.ad}$cinsText$alanText$siraText';
+
       final nameTp = TextPainter(
         text: TextSpan(
-            text: p.ad,
+            text: labelText,
             style: const TextStyle(
                 color: Color(0xFF059669),
-                fontSize: 14,
-                fontWeight: FontWeight.bold)),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                height: 1.3)),
         textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
       )..layout();
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromCenter(
               center: center,
-              width: nameTp.width + 12,
-              height: nameTp.height + 6),
-          const Radius.circular(6),
+              width: nameTp.width + 16,
+              height: nameTp.height + 10),
+          const Radius.circular(8),
         ),
-        Paint()..color = Colors.white.withOpacity(0.85),
+        Paint()..color = Colors.white.withOpacity(0.9),
       );
       nameTp.paint(
           canvas,

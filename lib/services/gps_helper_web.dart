@@ -1,25 +1,35 @@
 import 'dart:async';
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
 import 'gps_helper.dart';
 
 Future<GpsKonum> getCurrentPosition() async {
   final completer = Completer<GpsKonum>();
 
-  final geo = html.window.navigator.geolocation;
-
-  geo.getCurrentPosition(
-    enableHighAccuracy: true,
-    timeout: const Duration(seconds: 15),
-  ).then((pos) {
+  final successCallback = (web.GeolocationPosition position) {
+    final coords = position.coords;
     completer.complete(GpsKonum(
-      latitude: pos.coords!.latitude! as double,
-      longitude: pos.coords!.longitude! as double,
-      accuracy: (pos.coords!.accuracy ?? 0) as double,
+      latitude: coords.latitude.toDouble(),
+      longitude: coords.longitude.toDouble(),
+      accuracy: coords.accuracy.toDouble(),
     ));
-  }).catchError((error) {
-    completer.completeError('GPS alınamadı: $error');
-  });
+  };
+
+  final errorCallback = (web.GeolocationPositionError error) {
+    completer.completeError('GPS alınamadı: ${error.message} (kod: ${error.code})');
+  };
+
+  final options = web.PositionOptions(
+    enableHighAccuracy: true,
+    timeout: 15000,
+    maximumAge: 0,
+  );
+
+  web.window.navigator.geolocation.getCurrentPosition(
+    successCallback.toJS,
+    errorCallback.toJS,
+    options,
+  );
 
   return completer.future;
 }

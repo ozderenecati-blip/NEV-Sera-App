@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// ── Web GPS: dart:html conditional import ──
+// Web GPS: conditional import
 import 'gps_helper_stub.dart'
-    if (dart.library.html) 'gps_helper_web.dart' as web_gps;
+    if (dart.library.js_interop) 'gps_helper_web.dart' as web_gps;
 
-// ── Native GPS: geolocator ──
+// Native GPS: conditional import
 import 'gps_helper_stub.dart'
     if (dart.library.io) 'gps_helper_native.dart' as native_gps;
 

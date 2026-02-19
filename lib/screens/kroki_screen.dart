@@ -524,26 +524,36 @@ class _KrokiScreenState extends State<KrokiScreen> {
                           ),
                         ),
                       ],
-                      if (_gpsAvailable) ...[
-                        const SizedBox(width: 4),
-                        SizedBox(
-                          width: 32,
-                          height: 32,
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: _gpsLoading
-                                ? null
-                                : () => _getGpsPosition(i),
-                            icon: Icon(
-                              _gpsLoading
-                                  ? Icons.hourglass_top
-                                  : Icons.gps_fixed,
-                              size: 18,
-                              color: Colors.blue,
-                            ),
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        height: 36,
+                        child: ElevatedButton.icon(
+                          onPressed: _gpsLoading
+                              ? null
+                              : () => _getGpsPosition(i),
+                          icon: Icon(
+                            _gpsLoading
+                                ? Icons.hourglass_top
+                                : (i < _gpsPositions.length && _gpsPositions[i] != null)
+                                    ? Icons.gps_fixed
+                                    : Icons.gps_not_fixed,
+                            size: 16,
+                          ),
+                          label: Text(
+                            (i < _gpsPositions.length && _gpsPositions[i] != null)
+                                ? 'GPS ✓'
+                                : 'GPS',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: (i < _gpsPositions.length && _gpsPositions[i] != null)
+                                ? Colors.green
+                                : Colors.blue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                           ),
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 );
@@ -930,25 +940,47 @@ class _KrokiScreenState extends State<KrokiScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text('Sıra Yönü',
+          Text('Sıra Yönü — Hangi kenara paralel?',
               style: TextStyle(
-                  fontSize: 13, color: Colors.grey.shade600)),
+                  fontSize: 13, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            children: [
-              _buildYonChip('Yatay ↔', 0, p),
-              _buildYonChip('Dikey ↕', 90, p),
-              _buildYonChip('Çapraz ⤡', 45, p),
-              _buildYonChip('Çapraz ⤢', 135, p),
-            ],
-          ),
+          if (p.points.length >= 3)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(p.points.length, (ki) {
+                final kj = (ki + 1) % p.points.length;
+                final selected = p.seciliKenarIdx == ki;
+                return ChoiceChip(
+                  label: Text('Kenar ${ki + 1}→${kj + 1}', style: const TextStyle(fontSize: 11)),
+                  selected: selected,
+                  selectedColor: Colors.purple.withOpacity(0.25),
+                  avatar: selected ? const Icon(Icons.check, size: 14, color: Colors.purple) : null,
+                  onSelected: (_) {
+                    setState(() {
+                      p.seciliKenarIdx = ki;
+                      // Kenarın açısını hesapla
+                      final a = p.points[ki];
+                      final b = p.points[kj];
+                      p.siraAcisi = atan2(b.dy - a.dy, b.dx - a.dx) * 180 / pi;
+                    });
+                  },
+                );
+              }),
+            )
+          else
+            Text('Parsel çiziminde en az 3 köşe gerekli',
+                style: TextStyle(color: Colors.red.shade300, fontSize: 12)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed:
-                p.points.length >= 3 ? () => _generateRows(p) : null,
+                p.points.length >= 3 && p.seciliKenarIdx != null && p.siraAraligi > 0
+                    ? () => _generateRows(p)
+                    : null,
             icon: const Icon(Icons.auto_fix_high),
-            label: const Text('Sıraları Otomatik Oluştur'),
+            label: Text(p.seciliKenarIdx == null
+                ? 'Önce kenar seçin'
+                : 'Sıraları Otomatik Oluştur'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.purple,
               foregroundColor: Colors.white,
@@ -1005,16 +1037,6 @@ class _KrokiScreenState extends State<KrokiScreen> {
     );
   }
 
-  Widget _buildYonChip(String label, double acisi, _ParselData p) {
-    final selected = (p.siraAcisi ?? 0) == acisi;
-    return ChoiceChip(
-      label: Text(label, style: const TextStyle(fontSize: 11)),
-      selected: selected,
-      selectedColor: Colors.purple.withOpacity(0.2),
-      onSelected: (_) => setState(() => p.siraAcisi = acisi),
-    );
-  }
-
   Widget _buildNumberField(
       String label, double value, Function(double) onChanged) {
     final ctrl = TextEditingController(
@@ -1062,9 +1084,15 @@ class _KrokiScreenState extends State<KrokiScreen> {
 
   /// Paralel sıraları otomatik oluştur
   void _generateRows(_ParselData p) {
-    if (p.points.length < 3 || p.siraAraligi <= 0) return;
+    if (p.points.length < 3 || p.siraAraligi <= 0 || p.seciliKenarIdx == null) return;
 
-    final acisi = (p.siraAcisi ?? 0) * pi / 180;
+    // Seçili kenardan açı hesapla (piksel koordinatlarından)
+    final ki = p.seciliKenarIdx!;
+    final kj = (ki + 1) % p.points.length;
+    final acisi = atan2(
+      p.points[kj].dy - p.points[ki].dy,
+      p.points[kj].dx - p.points[ki].dx,
+    );
     final dirX = cos(acisi);
     final dirY = sin(acisi);
     // Dik yön (sıraların ilerleyeceği yön)
@@ -1400,6 +1428,7 @@ class _ParselData {
   double siraAraligi;
   double saksiAraligi;
   double? siraAcisi;
+  int? seciliKenarIdx; // sıraların paralel olacağı kenar indeksi
   List<Sira> siralar;
 
   _ParselData({
@@ -1408,6 +1437,7 @@ class _ParselData {
     this.siraAraligi = 1.0,
     this.saksiAraligi = 0.4,
     this.siraAcisi,
+    this.seciliKenarIdx,
     List<Sira>? siralar,
   }) : siralar = siralar ?? [];
 
@@ -1582,7 +1612,7 @@ class _ParselCizimPainter extends CustomPainter {
               ..strokeWidth = 2);
       }
 
-      // Köşeler
+      // Köşeler + numaraları
       for (int ki = 0; ki < p.points.length; ki++) {
         final isDrag =
             pi == draggingParselIdx && ki == draggingKoseIdx;
@@ -1598,13 +1628,64 @@ class _ParselCizimPainter extends CustomPainter {
               ..strokeWidth = 2);
         canvas.drawCircle(
             p.points[ki], 3, Paint()..color = color);
+
+        // Köşe numarası
+        if (isActive) {
+          final numTp = TextPainter(
+            text: TextSpan(
+                text: '${ki + 1}',
+                style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold)),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          // Arka plan
+          canvas.drawCircle(
+              p.points[ki] + Offset(r + 8, -r - 4),
+              9,
+              Paint()..color = Colors.white.withOpacity(0.9));
+          numTp.paint(canvas,
+              p.points[ki] + Offset(r + 8 - numTp.width / 2, -r - 4 - numTp.height / 2));
+        }
+      }
+
+      // Kenar etiketleri (kenar ortasında)
+      if (isActive && p.points.length >= 2) {
+        for (int ki = 0; ki < p.points.length; ki++) {
+          final kj = (ki + 1) % p.points.length;
+          if (kj == 0 && p.points.length < 3) continue;
+          final mid = (p.points[ki] + p.points[kj]) / 2;
+          final label = '${ki + 1}→${kj + 1}';
+          final tp = TextPainter(
+            text: TextSpan(
+                text: label,
+                style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w600)),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(
+                  center: mid,
+                  width: tp.width + 8,
+                  height: tp.height + 4),
+              const Radius.circular(4),
+            ),
+            Paint()..color = Colors.white.withOpacity(0.85),
+          );
+          tp.paint(canvas,
+              Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2));
+        }
       }
 
       // Parsel adı
       if (p.points.length >= 3) {
         final center = p.points.reduce((a, b) => a + b) /
             p.points.length.toDouble();
-        final tp = TextPainter(
+        final nameTp = TextPainter(
           text: TextSpan(
               text: p.ad,
               style: TextStyle(
@@ -1613,8 +1694,18 @@ class _ParselCizimPainter extends CustomPainter {
                   fontWeight: FontWeight.bold)),
           textDirection: TextDirection.ltr,
         )..layout();
-        tp.paint(canvas,
-            Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromCenter(
+                center: center,
+                width: nameTp.width + 10,
+                height: nameTp.height + 4),
+            const Radius.circular(6),
+          ),
+          Paint()..color = Colors.white.withOpacity(0.8),
+        );
+        nameTp.paint(canvas,
+            Offset(center.dx - nameTp.width / 2, center.dy - nameTp.height / 2));
       }
     }
   }

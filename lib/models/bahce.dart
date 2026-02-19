@@ -1,21 +1,54 @@
 /// Bahçe köşe noktası (kroki çizimi için)
 class BahceKose {
-  final double x;
-  final double y;
+  final double x; // metre cinsinden x (kroki)
+  final double y; // metre cinsinden y (kroki)
   final double metraj; // bu köşeden sonraki kenara kadar metre
+  final double? lat; // GPS enlem
+  final double? lng; // GPS boylam
+  final double? gpsMetraj; // GPS'e göre hesaplanan mesafe (teyit için)
 
   BahceKose({
     required this.x,
     required this.y,
     this.metraj = 0,
+    this.lat,
+    this.lng,
+    this.gpsMetraj,
   });
 
-  Map<String, dynamic> toMap() => {'x': x, 'y': y, 'metraj': metraj};
+  Map<String, dynamic> toMap() => {
+        'x': x,
+        'y': y,
+        'metraj': metraj,
+        'lat': lat,
+        'lng': lng,
+        'gps_metraj': gpsMetraj,
+      };
 
   factory BahceKose.fromMap(Map<String, dynamic> map) => BahceKose(
         x: (map['x'] ?? 0).toDouble(),
         y: (map['y'] ?? 0).toDouble(),
         metraj: (map['metraj'] ?? 0).toDouble(),
+        lat: (map['lat'] as num?)?.toDouble(),
+        lng: (map['lng'] as num?)?.toDouble(),
+        gpsMetraj: (map['gps_metraj'] as num?)?.toDouble(),
+      );
+
+  BahceKose copyWith({
+    double? x,
+    double? y,
+    double? metraj,
+    double? lat,
+    double? lng,
+    double? gpsMetraj,
+  }) =>
+      BahceKose(
+        x: x ?? this.x,
+        y: y ?? this.y,
+        metraj: metraj ?? this.metraj,
+        lat: lat ?? this.lat,
+        lng: lng ?? this.lng,
+        gpsMetraj: gpsMetraj ?? this.gpsMetraj,
       );
 }
 
@@ -64,6 +97,7 @@ class Sira {
   final String? id;
   final int numara;
   final int saksiSayisi;
+  final double uzunluk; // metre cinsinden sıra uzunluğu (otomatik hesaplanan)
   final String? cins; // tüm sıraya toplu cins
   final List<Saksi> saksilar;
 
@@ -71,6 +105,7 @@ class Sira {
     this.id,
     required this.numara,
     required this.saksiSayisi,
+    this.uzunluk = 0,
     this.cins,
     this.saksilar = const [],
   });
@@ -78,6 +113,7 @@ class Sira {
   Map<String, dynamic> toMap() => {
         'numara': numara,
         'saksi_sayisi': saksiSayisi,
+        'uzunluk': uzunluk,
         'cins': cins,
         'saksilar': saksilar.map((s) => s.toMap()).toList(),
       };
@@ -91,16 +127,18 @@ class Sira {
       id: docId ?? map['id']?.toString(),
       numara: map['numara'] ?? 0,
       saksiSayisi: map['saksi_sayisi'] ?? 0,
+      uzunluk: (map['uzunluk'] as num?)?.toDouble() ?? 0,
       cins: map['cins'],
       saksilar: saksiList,
     );
   }
 
-  Sira copyWith({String? cins, int? saksiSayisi, List<Saksi>? saksilar}) =>
+  Sira copyWith({String? cins, int? saksiSayisi, double? uzunluk, List<Saksi>? saksilar}) =>
       Sira(
         id: id,
         numara: numara,
         saksiSayisi: saksiSayisi ?? this.saksiSayisi,
+        uzunluk: uzunluk ?? this.uzunluk,
         cins: cins ?? this.cins,
         saksilar: saksilar ?? this.saksilar,
       );
@@ -115,6 +153,10 @@ class Parsel {
   final String? cins;
   final List<Sira> siralar;
   final String? not;
+  final List<BahceKose> koseler; // parsel sınır köşeleri
+  final double siraAraligi; // metre cinsinden sıra aralığı
+  final double saksiAraligi; // metre cinsinden saksı aralığı
+  final double? siraAcisi; // sıraların yönü (derece, 0=yatay, 90=dikey)
 
   Parsel({
     this.id,
@@ -124,9 +166,15 @@ class Parsel {
     this.cins,
     this.siralar = const [],
     this.not,
+    this.koseler = const [],
+    this.siraAraligi = 1.0,
+    this.saksiAraligi = 0.4,
+    this.siraAcisi,
   });
 
-  int get toplamSaksi => siraSayisi * siraBasinaSaksi;
+  int get toplamSaksi => siralar.isEmpty
+      ? siraSayisi * siraBasinaSaksi
+      : siralar.fold(0, (sum, s) => sum + s.saksiSayisi);
 
   Map<String, dynamic> toMap() => {
         'ad': ad,
@@ -135,11 +183,19 @@ class Parsel {
         'cins': cins,
         'siralar': siralar.map((s) => s.toMap()).toList(),
         'not': not,
+        'koseler': koseler.map((k) => k.toMap()).toList(),
+        'sira_araligi': siraAraligi,
+        'saksi_araligi': saksiAraligi,
+        'sira_acisi': siraAcisi,
       };
 
   factory Parsel.fromMap(Map<String, dynamic> map, {String? docId}) {
     final siraList = (map['siralar'] as List<dynamic>?)
             ?.map((s) => Sira.fromMap(s as Map<String, dynamic>))
+            .toList() ??
+        [];
+    final koseList = (map['koseler'] as List<dynamic>?)
+            ?.map((k) => BahceKose.fromMap(k as Map<String, dynamic>))
             .toList() ??
         [];
     return Parsel(
@@ -150,6 +206,10 @@ class Parsel {
       cins: map['cins'],
       siralar: siraList,
       not: map['not'],
+      koseler: koseList,
+      siraAraligi: (map['sira_araligi'] as num?)?.toDouble() ?? 1.0,
+      saksiAraligi: (map['saksi_araligi'] as num?)?.toDouble() ?? 0.4,
+      siraAcisi: (map['sira_acisi'] as num?)?.toDouble(),
     );
   }
 
@@ -160,6 +220,10 @@ class Parsel {
     String? cins,
     List<Sira>? siralar,
     String? not,
+    List<BahceKose>? koseler,
+    double? siraAraligi,
+    double? saksiAraligi,
+    double? siraAcisi,
   }) =>
       Parsel(
         id: id,
@@ -169,6 +233,10 @@ class Parsel {
         cins: cins ?? this.cins,
         siralar: siralar ?? this.siralar,
         not: not ?? this.not,
+        koseler: koseler ?? this.koseler,
+        siraAraligi: siraAraligi ?? this.siraAraligi,
+        saksiAraligi: saksiAraligi ?? this.saksiAraligi,
+        siraAcisi: siraAcisi ?? this.siraAcisi,
       );
 }
 

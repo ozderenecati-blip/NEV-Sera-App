@@ -1,16 +1,18 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/bahce.dart';
 import '../services/operasyon_service.dart';
 
-/// Kroki aşamaları
-enum KrokiAsama { cizim, duzeltme, metreGirisi }
+// ═══════════════════════════════════════════════════════════
+// KROKİ EKRANI v3
+// Akış: Bahçe Sınırı → Parseller → Sıralar → Önizleme
+// GPS + Parsel Polygon + Otomatik Sıra Oluşturma
+// ═══════════════════════════════════════════════════════════
 
-/// Bahçe krokisi çizim ekranı — 3 aşamalı:
-/// 1) Çizim: Kullanıcı parmağıyla/mouse ile köşe köşe dokunarak çizer
-/// 2) Düzeltme: Sistem çizimi temizler, kullanıcı köşeleri sürükleyerek düzeltir
-/// 3) Metre Girişi: Her kenarın gerçek uzunluğunu girer
+enum KrokiModu { bahceSiniri, parselCizim, siraOlusturma, onizleme }
+
 class KrokiScreen extends StatefulWidget {
   final Bahce bahce;
   const KrokiScreen({super.key, required this.bahce});
@@ -23,48 +25,141 @@ class _KrokiScreenState extends State<KrokiScreen> {
   final OperasyonService _service = OperasyonService();
   bool _isSaving = false;
 
-  // Aşama kontrolü
-  KrokiAsama _asama = KrokiAsama.cizim;
+  KrokiModu _mod = KrokiModu.bahceSiniri;
 
-  // Çizim aşaması: ekran pikseli olarak noktalar
-  List<Offset> _rawPoints = [];
+  // ── Bahçe sınır köşeleri (piksel ekran koordinatları) ──
+  List<Offset> _bahcePoints = [];
+  List<double> _bahceMetreler = [];
+  List<TextEditingController> _bahceMetreCtrl = [];
 
-  // Düzeltme aşaması: temizlenmiş noktalar (piksel)
-  List<Offset> _cleanPoints = [];
-  int? _draggingIndex; // sürüklenen köşe indeksi
+  // ── GPS verileri ──
+  List<Position?> _gpsPositions = [];
+  List<double?> _gpsDistances = [];
+  bool _gpsLoading = false;
+  bool _gpsAvailable = false;
 
-  // Metre girişi aşaması
-  List<double> _kenarMetreleri = [];
-  List<TextEditingController> _metreControllers = [];
+  // ── Parseller ──
+  List<_ParselData> _parseller = [];
+  int _activeParselIdx = -1;
 
-  // Canvas boyutu (build'den yakalanır)
+  // ── Sıra oluşturma ──
+  int _siraParselIdx = -1;
+
   Size _canvasSize = Size.zero;
+
+  // ── Sürükle-bırak ──
+  int? _draggingBahceIdx;
+  int? _draggingParselIdx;
+  int? _draggingParselKoseIdx;
+
+  bool _existingLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    // Eğer bahçede zaten köşeler varsa, onları yükle
-    if (widget.bahce.koseler.isNotEmpty) {
-      _asama = KrokiAsama.metreGirisi;
-      // Köşeleri ekran koordinatına çevirme initState'de yapılmaz,
-      // ilk build'de canvas boyutuna göre yapılacak
-    }
+    _checkGps();
+    _loadExistingParseller();
   }
 
   @override
   void dispose() {
-    for (final c in _metreControllers) {
+    for (final c in _bahceMetreCtrl) {
       c.dispose();
+    }
+    for (final p in _parseller) {
+      for (final c in p.metreCtrl) {
+        c.dispose();
+      }
     }
     super.dispose();
   }
 
-  /// Bahçedeki mevcut köşeleri ekrana yerleştir
-  void _loadExistingCorners() {
-    if (widget.bahce.koseler.isEmpty || _canvasSize == Size.zero) return;
-    final koseler = widget.bahce.koseler;
+  void _loadExistingParseller() {
+    if (widget.bahce.parseller.isNotEmpty) {
+      for (final p in widget.bahce.parseller) {
+        _parseller.add(_ParselData(
+          ad: p.ad,
+          cins: p.cins,
+          siraAraligi: p.siraAraligi,
+          saksiAraligi: p.saksiAraligi,
+          siraAcisi: p.siraAcisi,
+          siralar: p.siralar,
+        ));
+      }
+    }
+    if (widget.bahce.koseler.isNotEmpty) {
+      _mod = KrokiModu.onizleme;
+    }
+  }
 
-    // Bounds hesapla
+  Future<void> _checkGps() async {
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        await Geolocator.requestPermission();
+      }
+      _gpsAvailable = await Geolocator.isLocationServiceEnabled();
+    } catch (_) {
+      _gpsAvailable = false;
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _getGpsPosition(int index) async {
+    setState(() => _gpsLoading = true);
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      while (_gpsPositions.length <= index) {
+        _gpsPositions.add(null);
+      }
+      _gpsPositions[index] = pos;
+
+      while (_gpsDistances.length <= index) {
+        _gpsDistances.add(null);
+      }
+      // GPS mesafesi: önceki köşeye
+      if (index > 0 && _gpsPositions[index - 1] != null) {
+        final prev = _gpsPositions[index - 1]!;
+        final dist = Geolocator.distanceBetween(
+          prev.latitude,
+          prev.longitude,
+          pos.latitude,
+          pos.longitude,
+        );
+        _gpsDistances[index - 1] = dist;
+      }
+      // Son→İlk kapama
+      if (index == _bahcePoints.length - 1 &&
+          _bahcePoints.length >= 3 &&
+          _gpsPositions.isNotEmpty &&
+          _gpsPositions[0] != null) {
+        final first = _gpsPositions[0]!;
+        final dist = Geolocator.distanceBetween(
+          pos.latitude,
+          pos.longitude,
+          first.latitude,
+          first.longitude,
+        );
+        _gpsDistances[index] = dist;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('GPS hatası: $e')));
+      }
+    }
+    setState(() => _gpsLoading = false);
+  }
+
+  // ─── Mevcut köşeleri piksel'e yükle ───
+  void _loadBahcePointsFromModel() {
+    final koseler = widget.bahce.koseler;
+    if (koseler.isEmpty || _canvasSize == Size.zero) return;
+
     double minX = double.infinity, maxX = -double.infinity;
     double minY = double.infinity, maxY = -double.infinity;
     for (final k in koseler) {
@@ -73,99 +168,160 @@ class _KrokiScreenState extends State<KrokiScreen> {
       minY = min(minY, k.y);
       maxY = max(maxY, k.y);
     }
-
+    const padding = 50.0;
+    final usableW = _canvasSize.width - padding * 2;
+    final usableH = _canvasSize.height - padding * 2;
     final rangeX = maxX - minX;
     final rangeY = maxY - minY;
     final maxRange = max(rangeX, rangeY);
-    final padding = 60.0;
-    final usableW = _canvasSize.width - padding * 2;
-    final usableH = _canvasSize.height - padding * 2;
-    final scale = maxRange > 0 ? min(usableW, usableH) / maxRange : 1.0;
-
+    final scale =
+        maxRange > 0 ? min(usableW, usableH) / maxRange : 1.0;
     final cx = (minX + maxX) / 2;
     final cy = (minY + maxY) / 2;
 
-    _cleanPoints = koseler.map((k) {
-      return Offset(
-        (k.x - cx) * scale + _canvasSize.width / 2,
-        (k.y - cy) * scale + _canvasSize.height / 2,
-      );
-    }).toList();
+    _bahcePoints = koseler
+        .map((k) => Offset(
+              (k.x - cx) * scale + _canvasSize.width / 2,
+              (k.y - cy) * scale + _canvasSize.height / 2,
+            ))
+        .toList();
+    _bahceMetreler = koseler.map((k) => k.metraj).toList();
+    _initBahceMetreCtrl();
 
-    _kenarMetreleri = List.generate(koseler.length, (i) => koseler[i].metraj);
-    _initMetreControllers();
+    // Parsel köşelerini de yükle
+    for (int pi = 0;
+        pi < _parseller.length && pi < widget.bahce.parseller.length;
+        pi++) {
+      final pKoseler = widget.bahce.parseller[pi].koseler;
+      if (pKoseler.isNotEmpty) {
+        _parseller[pi].points = pKoseler
+            .map((k) => Offset(
+                  (k.x - cx) * scale + _canvasSize.width / 2,
+                  (k.y - cy) * scale + _canvasSize.height / 2,
+                ))
+            .toList();
+        _parseller[pi].metreler =
+            pKoseler.map((k) => k.metraj).toList();
+        _parseller[pi].initMetreCtrl();
+      }
+    }
+    _existingLoaded = true;
   }
 
-  void _initMetreControllers() {
-    for (final c in _metreControllers) {
+  void _initBahceMetreCtrl() {
+    for (final c in _bahceMetreCtrl) {
       c.dispose();
     }
-    _metreControllers = List.generate(_kenarMetreleri.length, (i) {
-      return TextEditingController(
-        text: _kenarMetreleri[i] > 0 ? _kenarMetreleri[i].toStringAsFixed(1) : '',
-      );
-    });
+    _bahceMetreCtrl = List.generate(
+      _bahceMetreler.length,
+      (i) => TextEditingController(
+        text: _bahceMetreler[i] > 0
+            ? _bahceMetreler[i].toStringAsFixed(1)
+            : '',
+      ),
+    );
   }
 
+  // ═══════════════════════════════════════════════════════
+  // BUILD
+  // ═══════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Kroki - ${widget.bahce.ad}'),
+        title: Text('Kroki — ${widget.bahce.ad}'),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         actions: [
-          if (_asama == KrokiAsama.metreGirisi && _cleanPoints.length >= 3)
+          if (_mod == KrokiModu.onizleme ||
+              _parseller.any((p) => p.siralar.isNotEmpty))
             IconButton(
-              onPressed: _isSaving ? null : _saveCroquis,
+              onPressed: _isSaving ? null : _saveAll,
               icon: _isSaving
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
-              tooltip: 'Kaydet',
+              tooltip: 'Tümünü Kaydet',
             ),
         ],
       ),
       body: Column(
         children: [
-          _buildAsamaBar(),
+          _buildModBar(),
           Expanded(child: _buildBody()),
-          _buildBottomBar(),
+          _buildBottomPanel(),
         ],
       ),
     );
   }
 
-  // ─── Üst: Aşama göstergesi ─────────────────────────────
-  Widget _buildAsamaBar() {
-    final labels = ['1. Çiz', '2. Düzelt', '3. Metre Gir'];
-    final icons = [Icons.gesture, Icons.auto_fix_high, Icons.straighten];
-    final currentIdx = _asama.index;
-
+  // ─── MOD BAR ────────────────────────────────────────────
+  Widget _buildModBar() {
+    final items = [
+      ('Bahçe Sınırı', Icons.crop_free),
+      ('Parseller', Icons.grid_view),
+      ('Sıralar', Icons.view_column),
+      ('Önizleme', Icons.visibility),
+    ];
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       color: const Color(0xFFFFF8E1),
       child: Row(
-        children: List.generate(3, (i) {
-          final isActive = i == currentIdx;
-          final isDone = i < currentIdx;
+        children: List.generate(4, (i) {
+          final isActive = i == _mod.index;
+          final isDone = i < _mod.index;
           return Expanded(
-            child: Row(
-              children: [
-                if (i > 0) Expanded(child: Container(height: 2, color: isDone ? const Color(0xFFD97706) : Colors.grey.shade300)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isActive ? const Color(0xFFD97706) : isDone ? const Color(0xFFD97706).withOpacity(0.2) : Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(isDone ? Icons.check : icons[i], size: 16, color: isActive ? Colors.white : isDone ? const Color(0xFFD97706) : Colors.grey),
-                    const SizedBox(width: 4),
-                    Text(labels[i], style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.white : isDone ? const Color(0xFFD97706) : Colors.grey.shade600)),
-                  ]),
+            child: GestureDetector(
+              onTap: () {
+                if (i == 0 ||
+                    (i == 1 && _bahcePoints.length >= 3) ||
+                    (i == 2 && _parseller.isNotEmpty) ||
+                    (i == 3)) {
+                  setState(() => _mod = KrokiModu.values[i]);
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? const Color(0xFFD97706)
+                      : isDone
+                          ? const Color(0xFFD97706).withOpacity(0.15)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-              ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isDone ? Icons.check_circle : items[i].$2,
+                      size: 18,
+                      color: isActive
+                          ? Colors.white
+                          : isDone
+                              ? const Color(0xFFD97706)
+                              : Colors.grey,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      items[i].$1,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: isActive
+                            ? Colors.white
+                            : isDone
+                                ? const Color(0xFFD97706)
+                                : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           );
         }),
@@ -173,278 +329,972 @@ class _KrokiScreenState extends State<KrokiScreen> {
     );
   }
 
-  // ─── Ana gövde ──────────────────────────────────────────
+  // ─── BODY ───────────────────────────────────────────────
   Widget _buildBody() {
-    return LayoutBuilder(builder: (context, constraints) {
+    return LayoutBuilder(builder: (ctx, constraints) {
       _canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
 
-      // Mevcut köşeleri yükle (ilk kez)
-      if (widget.bahce.koseler.isNotEmpty && _cleanPoints.isEmpty && _asama == KrokiAsama.metreGirisi) {
+      // Mevcut bahçe köşelerini piksel olarak yükle (bir kez)
+      if (widget.bahce.koseler.isNotEmpty &&
+          _bahcePoints.isEmpty &&
+          !_existingLoaded) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _loadExistingCorners();
-          setState(() {});
+          _loadBahcePointsFromModel();
+          if (mounted) setState(() {});
         });
       }
 
-      switch (_asama) {
-        case KrokiAsama.cizim:
-          return _buildCizimCanvas();
-        case KrokiAsama.duzeltme:
-          return _buildDuzeltmeCanvas();
-        case KrokiAsama.metreGirisi:
-          return _buildMetreGirisiView();
+      switch (_mod) {
+        case KrokiModu.bahceSiniri:
+          return _buildBahceSiniriView();
+        case KrokiModu.parselCizim:
+          return _buildParselCizimView();
+        case KrokiModu.siraOlusturma:
+          return _buildSiraOlusturmaView();
+        case KrokiModu.onizleme:
+          return _buildOnizlemeView();
       }
     });
   }
 
-  // ─── AŞAMA 1: Serbest çizim ────────────────────────────
-  Widget _buildCizimCanvas() {
-    return GestureDetector(
-      onTapDown: (details) {
-        setState(() {
-          _rawPoints.add(details.localPosition);
-        });
-      },
-      child: Container(
-        color: Colors.grey.shade50,
-        child: CustomPaint(
-          painter: _CizimPainter(points: _rawPoints),
-          size: Size.infinite,
-          child: _rawPoints.isEmpty
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.touch_app, size: 64, color: Color(0xFFD97706)),
-                    const SizedBox(height: 16),
-                    Text('Bahçenin köşelerine tıklayın', style: TextStyle(fontSize: 16, color: Colors.grey.shade600, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    Text('Her tıklama bir köşe noktası oluşturur\nSırayla köşe köşe ilerleyin',
-                        textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
-                  ]).animate().fadeIn(),
-                )
-              : null,
-        ),
-      ),
-    );
-  }
-
-  // ─── AŞAMA 2: Düzeltme (sürükle-bırak) ─────────────────
-  Widget _buildDuzeltmeCanvas() {
-    return GestureDetector(
-      onPanStart: (details) {
-        // En yakın noktayı bul
-        final pos = details.localPosition;
-        double minDist = 40; // dokunma yarıçapı
-        int? closest;
-        for (int i = 0; i < _cleanPoints.length; i++) {
-          final d = (_cleanPoints[i] - pos).distance;
-          if (d < minDist) {
-            minDist = d;
-            closest = i;
-          }
-        }
-        setState(() => _draggingIndex = closest);
-      },
-      onPanUpdate: (details) {
-        if (_draggingIndex != null) {
-          setState(() {
-            _cleanPoints[_draggingIndex!] = details.localPosition;
-          });
-        }
-      },
-      onPanEnd: (_) {
-        setState(() => _draggingIndex = null);
-      },
-      // Uzun basınca köşe sil
-      onLongPressStart: (details) {
-        final pos = details.localPosition;
-        double minDist = 40;
-        int? closest;
-        for (int i = 0; i < _cleanPoints.length; i++) {
-          final d = (_cleanPoints[i] - pos).distance;
-          if (d < minDist) {
-            minDist = d;
-            closest = i;
-          }
-        }
-        if (closest != null && _cleanPoints.length > 3) {
-          setState(() => _cleanPoints.removeAt(closest!));
-        }
-      },
-      // Çift tıkla yeni köşe ekle
-      onDoubleTapDown: (details) {
-        // En yakın kenarın ortasına ekle
-        final pos = details.localPosition;
-        int insertIdx = _cleanPoints.length; // sona
-        double minDist = double.infinity;
-
-        for (int i = 0; i < _cleanPoints.length; i++) {
-          final j = (i + 1) % _cleanPoints.length;
-          final mid = (_cleanPoints[i] + _cleanPoints[j]) / 2;
-          final d = (mid - pos).distance;
-          if (d < minDist) {
-            minDist = d;
-            insertIdx = j;
-          }
-        }
-        setState(() => _cleanPoints.insert(insertIdx, pos));
-      },
-      child: Container(
-        color: Colors.grey.shade50,
-        child: CustomPaint(
-          painter: _DuzeltmePainter(points: _cleanPoints, draggingIndex: _draggingIndex),
-          size: Size.infinite,
-          child: _cleanPoints.isEmpty ? const Center(child: CircularProgressIndicator()) : null,
-        ),
-      ),
-    );
-  }
-
-  // ─── AŞAMA 3: Metre girişi ──────────────────────────────
-  Widget _buildMetreGirisiView() {
+  // ═══════════════════════════════════════════════════════
+  // 1) BAHÇE SINIRI
+  // ═══════════════════════════════════════════════════════
+  Widget _buildBahceSiniriView() {
     return Column(
       children: [
-        // Üst: Canvas
+        Expanded(
+          flex: 3,
+          child: GestureDetector(
+            onTapDown: (d) => setState(() {
+              _bahcePoints.add(d.localPosition);
+              _bahceMetreler.add(0);
+              _gpsPositions.add(null);
+              _gpsDistances.add(null);
+              _initBahceMetreCtrl();
+            }),
+            onPanStart: (d) {
+              double minD = 35;
+              int? closest;
+              for (int i = 0; i < _bahcePoints.length; i++) {
+                final dist =
+                    (_bahcePoints[i] - d.localPosition).distance;
+                if (dist < minD) {
+                  minD = dist;
+                  closest = i;
+                }
+              }
+              _draggingBahceIdx = closest;
+            },
+            onPanUpdate: (d) {
+              if (_draggingBahceIdx != null) {
+                setState(() => _bahcePoints[_draggingBahceIdx!] =
+                    d.localPosition);
+              }
+            },
+            onPanEnd: (_) => _draggingBahceIdx = null,
+            child: Container(
+              color: Colors.grey.shade50,
+              child: CustomPaint(
+                painter: _BahceSinirPainter(
+                  points: _bahcePoints,
+                  dragging: _draggingBahceIdx,
+                ),
+                size: Size.infinite,
+                child: _bahcePoints.isEmpty
+                    ? Center(
+                        child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _gpsAvailable
+                                ? Icons.gps_fixed
+                                : Icons.touch_app,
+                            size: 56,
+                            color: const Color(0xFFD97706),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _gpsAvailable
+                                ? 'Köşeye tıklayın veya GPS ile işaretleyin'
+                                : 'Bahçenin köşelerine tıklayın',
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Sırası ile köşe noktalarını belirleyin',
+                            style: TextStyle(
+                              color: Colors.grey.shade400,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ).animate().fadeIn())
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        // Kenar metreleri listesi
+        if (_bahcePoints.length >= 2)
+          Expanded(
+            flex: 2,
+            child: ListView.builder(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              itemCount: _bahcePoints.length,
+              itemBuilder: (ctx, i) {
+                final j = (i + 1) % _bahcePoints.length;
+                final gpsDist = i < _gpsDistances.length
+                    ? _gpsDistances[i]
+                    : null;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 70,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${i + 1}→${j + 1}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.red,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: SizedBox(
+                          height: 40,
+                          child: TextField(
+                            controller: _bahceMetreCtrl[i],
+                            keyboardType:
+                                const TextInputType.numberWithOptions(
+                                    decimal: true),
+                            decoration: InputDecoration(
+                              hintText: 'metre',
+                              suffixText: 'm',
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 10),
+                              border: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(8)),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                    color: Colors.red, width: 2),
+                              ),
+                            ),
+                            onChanged: (v) => _bahceMetreler[i] =
+                                double.tryParse(
+                                        v.replaceAll(',', '.')) ??
+                                    0,
+                          ),
+                        ),
+                      ),
+                      if (gpsDist != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '📍${gpsDist.toStringAsFixed(1)}m',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (_gpsAvailable) ...[
+                        const SizedBox(width: 4),
+                        SizedBox(
+                          width: 32,
+                          height: 32,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            onPressed: _gpsLoading
+                                ? null
+                                : () => _getGpsPosition(i),
+                            icon: Icon(
+                              _gpsLoading
+                                  ? Icons.hourglass_top
+                                  : Icons.gps_fixed,
+                              size: 18,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 2) PARSEL ÇİZİMİ
+  // ═══════════════════════════════════════════════════════
+  Widget _buildParselCizimView() {
+    return Column(
+      children: [
+        // Üst: parsel sekmeleri
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              ..._parseller.asMap().entries.map((e) => Padding(
+                    padding: const EdgeInsets.only(
+                        right: 6, top: 6, bottom: 6),
+                    child: ChoiceChip(
+                      label:
+                          Text(e.value.ad, style: const TextStyle(fontSize: 12)),
+                      selected: _activeParselIdx == e.key,
+                      selectedColor:
+                          const Color(0xFF059669).withOpacity(0.2),
+                      onSelected: (_) =>
+                          setState(() => _activeParselIdx = e.key),
+                    ),
+                  )),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: ActionChip(
+                  avatar: const Icon(Icons.add,
+                      size: 16, color: Color(0xFF059669)),
+                  label: const Text('Parsel Ekle',
+                      style: TextStyle(
+                          fontSize: 12, color: Color(0xFF059669))),
+                  onPressed: _addNewParsel,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Canvas
+        Expanded(
+          flex: 3,
+          child: GestureDetector(
+            onTapDown: (d) {
+              if (_activeParselIdx >= 0 &&
+                  _activeParselIdx < _parseller.length) {
+                setState(() {
+                  _parseller[_activeParselIdx].points
+                      .add(d.localPosition);
+                  _parseller[_activeParselIdx].metreler.add(0);
+                  _parseller[_activeParselIdx].initMetreCtrl();
+                });
+              }
+            },
+            onPanStart: (d) {
+              if (_activeParselIdx < 0) return;
+              final pts = _parseller[_activeParselIdx].points;
+              double minD = 35;
+              int? closest;
+              for (int i = 0; i < pts.length; i++) {
+                final dist = (pts[i] - d.localPosition).distance;
+                if (dist < minD) {
+                  minD = dist;
+                  closest = i;
+                }
+              }
+              if (closest != null) {
+                _draggingParselIdx = _activeParselIdx;
+                _draggingParselKoseIdx = closest;
+              }
+            },
+            onPanUpdate: (d) {
+              if (_draggingParselIdx != null &&
+                  _draggingParselKoseIdx != null) {
+                setState(() {
+                  _parseller[_draggingParselIdx!]
+                          .points[_draggingParselKoseIdx!] =
+                      d.localPosition;
+                });
+              }
+            },
+            onPanEnd: (_) {
+              _draggingParselIdx = null;
+              _draggingParselKoseIdx = null;
+            },
+            child: Container(
+              color: Colors.grey.shade50,
+              child: CustomPaint(
+                painter: _ParselCizimPainter(
+                  bahcePoints: _bahcePoints,
+                  parseller: _parseller,
+                  activeIdx: _activeParselIdx,
+                  draggingParselIdx: _draggingParselIdx,
+                  draggingKoseIdx: _draggingParselKoseIdx,
+                ),
+                size: Size.infinite,
+                child: _parseller.isEmpty || _activeParselIdx < 0
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.grid_view,
+                                size: 48,
+                                color: Color(0xFF059669)),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Önce parsel ekleyin, sonra köşe tıklayın',
+                              style: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 14),
+                            ),
+                          ],
+                        ),
+                      )
+                    : null,
+              ),
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        // Alt: aktif parsel metre listesi
+        if (_activeParselIdx >= 0 &&
+            _activeParselIdx < _parseller.length &&
+            _parseller[_activeParselIdx].points.length >= 2)
+          Expanded(
+            flex: 2,
+            child: Column(
+              children: [
+                // Parsel silme
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      Text(
+                        _parseller[_activeParselIdx].ad,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF059669)),
+                      ),
+                      const Spacer(),
+                      TextButton.icon(
+                        onPressed: () => setState(() {
+                          _parseller.removeAt(_activeParselIdx);
+                          _activeParselIdx = _parseller.isEmpty
+                              ? -1
+                              : max(0, _activeParselIdx - 1);
+                        }),
+                        icon: const Icon(Icons.delete_outline,
+                            size: 16, color: Colors.red),
+                        label: const Text('Sil',
+                            style: TextStyle(
+                                color: Colors.red, fontSize: 12)),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 0),
+                    itemCount:
+                        _parseller[_activeParselIdx].points.length,
+                    itemBuilder: (ctx, i) {
+                      final p = _parseller[_activeParselIdx];
+                      final j = (i + 1) % p.points.length;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 70,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF059669)
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${i + 1}→${j + 1}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF059669),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SizedBox(
+                                height: 38,
+                                child: TextField(
+                                  controller: p.metreCtrl[i],
+                                  keyboardType:
+                                      const TextInputType
+                                          .numberWithOptions(
+                                          decimal: true),
+                                  decoration: InputDecoration(
+                                    hintText: 'metre',
+                                    suffixText: 'm',
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 10),
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                      borderSide: const BorderSide(
+                                          color: Color(0xFF059669),
+                                          width: 2),
+                                    ),
+                                  ),
+                                  onChanged: (v) => p.metreler[i] =
+                                      double.tryParse(
+                                              v.replaceAll(',', '.')) ??
+                                          0,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _addNewParsel() {
+    final nameCtrl =
+        TextEditingController(text: 'P-${_parseller.length + 1}');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yeni Parsel'),
+        content: TextField(
+          controller: nameCtrl,
+          decoration: InputDecoration(
+            labelText: 'Parsel Adı',
+            hintText: 'ör: O_07',
+            border:
+                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.trim().isEmpty) return;
+              setState(() {
+                _parseller
+                    .add(_ParselData(ad: nameCtrl.text.trim()));
+                _activeParselIdx = _parseller.length - 1;
+              });
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white),
+            child: const Text('Oluştur'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 3) SIRA OLUŞTURMA
+  // ═══════════════════════════════════════════════════════
+  Widget _buildSiraOlusturmaView() {
+    return Column(
+      children: [
+        // Parsel seçim sekmeleri
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              ..._parseller.asMap().entries.map((e) {
+                final hasSira = e.value.siralar.isNotEmpty;
+                return Padding(
+                  padding: const EdgeInsets.only(
+                      right: 6, top: 6, bottom: 6),
+                  child: ChoiceChip(
+                    label: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(e.value.ad,
+                            style: const TextStyle(fontSize: 12)),
+                        if (hasSira) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.check,
+                              size: 14,
+                              color: Colors.green.shade700),
+                        ],
+                      ],
+                    ),
+                    selected: _siraParselIdx == e.key,
+                    selectedColor: Colors.purple.withOpacity(0.2),
+                    onSelected: (_) =>
+                        setState(() => _siraParselIdx = e.key),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+        // Canvas
         Expanded(
           flex: 3,
           child: Container(
             color: Colors.grey.shade50,
             child: CustomPaint(
-              painter: _MetrePainter(points: _cleanPoints, metreler: _kenarMetreleri),
+              painter: _SiraPainter(
+                bahcePoints: _bahcePoints,
+                parseller: _parseller,
+                activeParselIdx: _siraParselIdx,
+                pxPerMetre: _calcGlobalPxPerMetre(),
+              ),
               size: Size.infinite,
             ),
           ),
         ),
         const Divider(height: 1),
-        // Alt: Kenar metre listesi
-        Expanded(
-          flex: 2,
-          child: _metreControllers.isEmpty
-              ? Center(child: Text('Köşeler yükleniyor...', style: TextStyle(color: Colors.grey.shade400)))
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _cleanPoints.length,
-                  itemBuilder: (context, i) {
-                    final j = (i + 1) % _cleanPoints.length;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          // Kenar etiketi
-                          Container(
-                            width: 80,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFD97706).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'Kenar ${i + 1}→${j + 1}',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFD97706)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          // Metre input
-                          Expanded(
-                            child: SizedBox(
-                              height: 44,
-                              child: TextField(
-                                controller: _metreControllers[i],
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                decoration: InputDecoration(
-                                  hintText: 'metre',
-                                  suffixText: 'm',
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                    borderSide: const BorderSide(color: Color(0xFFD97706), width: 2),
-                                  ),
-                                ),
-                                onChanged: (val) {
-                                  final parsed = double.tryParse(val.replaceAll(',', '.')) ?? 0;
-                                  _kenarMetreleri[i] = parsed;
-                                  setState(() {});
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-        ),
+        // Alt: sıra ayarları
+        if (_siraParselIdx >= 0 && _siraParselIdx < _parseller.length)
+          Expanded(
+            flex: 2,
+            child: _buildSiraAyarPanel(),
+          ),
       ],
     );
   }
 
-  // ─── Alt buton bar ──────────────────────────────────────
-  Widget _buildBottomBar() {
+  Widget _buildSiraAyarPanel() {
+    final p = _parseller[_siraParselIdx];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${p.ad} — Sıra Ayarları',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildNumberField(
+                  'Sıra Aralığı (m)',
+                  p.siraAraligi,
+                  (v) => setState(() => p.siraAraligi = v),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildNumberField(
+                  'Saksı Aralığı (m)',
+                  p.saksiAraligi,
+                  (v) => setState(() => p.saksiAraligi = v),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('Sıra Yönü',
+              style: TextStyle(
+                  fontSize: 13, color: Colors.grey.shade600)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            children: [
+              _buildYonChip('Yatay ↔', 0, p),
+              _buildYonChip('Dikey ↕', 90, p),
+              _buildYonChip('Çapraz ⤡', 45, p),
+              _buildYonChip('Çapraz ⤢', 135, p),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed:
+                p.points.length >= 3 ? () => _generateRows(p) : null,
+            icon: const Icon(Icons.auto_fix_high),
+            label: const Text('Sıraları Otomatik Oluştur'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 46),
+            ),
+          ),
+          if (p.siralar.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.purple.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${p.siralar.length} sıra oluşturuldu',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple),
+                  ),
+                  const SizedBox(height: 6),
+                  ...p.siralar.take(10).map((s) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'Sıra ${s.numara}: ${s.uzunluk.toStringAsFixed(1)}m — ${s.saksiSayisi} saksı',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700),
+                        ),
+                      )),
+                  if (p.siralar.length > 10)
+                    Text(
+                      '... +${p.siralar.length - 10} daha',
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade500),
+                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Toplam: ${p.siralar.fold<int>(0, (s, r) => s + r.saksiSayisi)} saksı',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.purple),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildYonChip(String label, double acisi, _ParselData p) {
+    final selected = (p.siraAcisi ?? 0) == acisi;
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 11)),
+      selected: selected,
+      selectedColor: Colors.purple.withOpacity(0.2),
+      onSelected: (_) => setState(() => p.siraAcisi = acisi),
+    );
+  }
+
+  Widget _buildNumberField(
+      String label, double value, Function(double) onChanged) {
+    final ctrl = TextEditingController(
+        text: value > 0 ? value.toStringAsFixed(2) : '');
+    return TextField(
+      controller: ctrl,
+      keyboardType:
+          const TextInputType.numberWithOptions(decimal: true),
+      decoration: InputDecoration(
+        labelText: label,
+        suffixText: 'm',
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10)),
+      ),
+      onChanged: (v) =>
+          onChanged(double.tryParse(v.replaceAll(',', '.')) ?? 0),
+    );
+  }
+
+  // ── Piksel/metre oran hesaplama ──
+  double _calcGlobalPxPerMetre() {
+    // Önce bahçe kenarlarından hesapla
+    double totalPx = 0, totalM = 0;
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      final j = (i + 1) % _bahcePoints.length;
+      totalPx += (_bahcePoints[j] - _bahcePoints[i]).distance;
+      totalM += (i < _bahceMetreler.length) ? _bahceMetreler[i] : 0;
+    }
+    if (totalM > 0) return totalPx / totalM;
+    return 1.0;
+  }
+
+  double _calcParselPxPerMetre(_ParselData p) {
+    double totalPx = 0, totalM = 0;
+    for (int i = 0; i < p.points.length; i++) {
+      final j = (i + 1) % p.points.length;
+      totalPx += (p.points[j] - p.points[i]).distance;
+      totalM += (i < p.metreler.length) ? p.metreler[i] : 0;
+    }
+    if (totalM > 0) return totalPx / totalM;
+    return _calcGlobalPxPerMetre();
+  }
+
+  /// Paralel sıraları otomatik oluştur
+  void _generateRows(_ParselData p) {
+    if (p.points.length < 3 || p.siraAraligi <= 0) return;
+
+    final acisi = (p.siraAcisi ?? 0) * pi / 180;
+    final dirX = cos(acisi);
+    final dirY = sin(acisi);
+    // Dik yön (sıraların ilerleyeceği yön)
+    final perpX = -dirY;
+    final perpY = dirX;
+
+    // Tüm noktaları dik eksen üzerine projeksiyonla min/max bul
+    double minProj = double.infinity, maxProj = -double.infinity;
+    for (final pt in p.points) {
+      final proj = pt.dx * perpX + pt.dy * perpY;
+      minProj = min(minProj, proj);
+      maxProj = max(maxProj, proj);
+    }
+
+    final pxPerMetre = _calcParselPxPerMetre(p);
+    final siraAralikPx = p.siraAraligi * pxPerMetre;
+    final saksiAralikPx = p.saksiAraligi * pxPerMetre;
+    if (siraAralikPx <= 0) return;
+
+    final siralar = <Sira>[];
+    int siraNo = 1;
+
+    for (double proj = minProj + siraAralikPx / 2;
+        proj <= maxProj - siraAralikPx / 2;
+        proj += siraAralikPx) {
+      // Bu paralel çizginin parsel polygonu ile kesişim noktalarını bul
+      final intersections = <double>[];
+
+      for (int i = 0; i < p.points.length; i++) {
+        final j = (i + 1) % p.points.length;
+        final a = p.points[i];
+        final b = p.points[j];
+
+        final projA = a.dx * perpX + a.dy * perpY;
+        final projB = b.dx * perpX + b.dy * perpY;
+
+        if ((projA <= proj && projB >= proj) ||
+            (projA >= proj && projB <= proj)) {
+          if ((projB - projA).abs() < 0.001) continue;
+          final t = (proj - projA) / (projB - projA);
+          final ix = a.dx + t * (b.dx - a.dx);
+          final iy = a.dy + t * (b.dy - a.dy);
+          final lineProj = ix * dirX + iy * dirY;
+          intersections.add(lineProj);
+        }
+      }
+
+      if (intersections.length >= 2) {
+        intersections.sort();
+        final siraStart = intersections.first;
+        final siraEnd = intersections.last;
+        final uzunlukPx = siraEnd - siraStart;
+        final uzunlukM = uzunlukPx / pxPerMetre;
+
+        if (uzunlukM < 0.1) continue;
+
+        final saksiSayisi = saksiAralikPx > 0
+            ? (uzunlukPx / saksiAralikPx).floor()
+            : 0;
+
+        siralar.add(Sira(
+          numara: siraNo,
+          saksiSayisi: max(1, saksiSayisi),
+          uzunluk: uzunlukM,
+        ));
+        siraNo++;
+      }
+    }
+
+    setState(() {
+      p.siralar = siralar;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+            '${siralar.length} sıra oluşturuldu, toplam ${siralar.fold<int>(0, (s, r) => s + r.saksiSayisi)} saksı'),
+      ));
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // 4) ÖNİZLEME
+  // ═══════════════════════════════════════════════════════
+  Widget _buildOnizlemeView() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+      color: Colors.grey.shade50,
+      child: CustomPaint(
+        painter: _OnizlemePainter(
+          bahcePoints: _bahcePoints,
+          parseller: _parseller,
+          pxPerMetre: _calcGlobalPxPerMetre(),
+          bahceMetreler: _bahceMetreler,
+        ),
+        size: Size.infinite,
+        child: _bahcePoints.isEmpty
+            ? Center(
+                child: Text(
+                  'Henüz kroki çizilmedi',
+                  style: TextStyle(
+                      color: Colors.grey.shade400, fontSize: 15),
+                ),
+              )
+            : null,
+      ),
+    );
+  }
+
+  // ─── ALT PANEL ──────────────────────────────────────────
+  Widget _buildBottomPanel() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, -2)),
+        ],
       ),
       child: SafeArea(
         child: Row(
           children: [
             // Sol butonlar
-            if (_asama != KrokiAsama.cizim)
-              OutlinedButton.icon(
-                onPressed: _geriDon,
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: const Text('Geri'),
-              ),
-            if (_asama == KrokiAsama.cizim && _rawPoints.isNotEmpty)
+            if (_mod == KrokiModu.bahceSiniri &&
+                _bahcePoints.isNotEmpty)
               OutlinedButton.icon(
                 onPressed: () => setState(() {
-                  _rawPoints.removeLast();
+                  _bahcePoints.removeLast();
+                  if (_bahceMetreler.isNotEmpty) {
+                    _bahceMetreler.removeLast();
+                  }
+                  if (_gpsPositions.isNotEmpty) {
+                    _gpsPositions.removeLast();
+                  }
+                  if (_gpsDistances.isNotEmpty) {
+                    _gpsDistances.removeLast();
+                  }
+                  _initBahceMetreCtrl();
                 }),
-                icon: const Icon(Icons.undo, size: 18, color: Colors.red),
-                label: const Text('Geri Al', style: TextStyle(color: Colors.red)),
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                icon: const Icon(Icons.undo,
+                    size: 16, color: Colors.red),
+                label: const Text('Geri Al',
+                    style: TextStyle(color: Colors.red, fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red)),
               ),
-            if (_asama == KrokiAsama.cizim && _rawPoints.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: OutlinedButton.icon(
-                  onPressed: () => setState(() {
-                    _rawPoints.clear();
-                  }),
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                  label: const Text('Temizle', style: TextStyle(color: Colors.red)),
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
-                ),
+            if (_mod == KrokiModu.parselCizim &&
+                _activeParselIdx >= 0 &&
+                _activeParselIdx < _parseller.length &&
+                _parseller[_activeParselIdx].points.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => setState(() {
+                  _parseller[_activeParselIdx].points.removeLast();
+                  if (_parseller[_activeParselIdx]
+                      .metreler
+                      .isNotEmpty) {
+                    _parseller[_activeParselIdx].metreler.removeLast();
+                  }
+                  _parseller[_activeParselIdx].initMetreCtrl();
+                }),
+                icon: const Icon(Icons.undo,
+                    size: 16, color: Colors.red),
+                label: const Text('Geri Al',
+                    style: TextStyle(color: Colors.red, fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red)),
               ),
             const Spacer(),
             // Bilgi
-            if (_asama == KrokiAsama.cizim)
-              Text('${_rawPoints.length} köşe', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-            if (_asama == KrokiAsama.duzeltme)
-              Text('${_cleanPoints.length} köşe', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-            if (_asama == KrokiAsama.metreGirisi)
-              Text(
-                'Alan: ${_calculateArea().toStringAsFixed(1)} m²',
-                style: const TextStyle(color: Color(0xFFD97706), fontSize: 13, fontWeight: FontWeight.w600),
-              ),
+            if (_mod == KrokiModu.bahceSiniri)
+              Text('${_bahcePoints.length} köşe',
+                  style: TextStyle(
+                      color: Colors.grey.shade500, fontSize: 13)),
+            if (_mod == KrokiModu.parselCizim)
+              Text('${_parseller.length} parsel',
+                  style: TextStyle(
+                      color: Colors.grey.shade500, fontSize: 13)),
             const SizedBox(width: 12),
-            // İleri butonu
-            if (_asama != KrokiAsama.metreGirisi)
+            // İleri butonları
+            if (_mod == KrokiModu.bahceSiniri &&
+                _bahcePoints.length >= 3)
               ElevatedButton.icon(
-                onPressed: _canAdvance() ? _ileriGit : null,
-                icon: const Icon(Icons.arrow_forward, size: 18),
-                label: Text(_asama == KrokiAsama.cizim ? 'Düzelt' : 'Metre Gir'),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
+                onPressed: () =>
+                    setState(() => _mod = KrokiModu.parselCizim),
+                icon: const Icon(Icons.arrow_forward, size: 16),
+                label: const Text('Parseller'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white),
               ),
-            if (_asama == KrokiAsama.metreGirisi)
+            if (_mod == KrokiModu.parselCizim &&
+                _parseller.any((p) => p.points.length >= 3))
               ElevatedButton.icon(
-                onPressed: _isSaving ? null : _saveCroquis,
+                onPressed: () => setState(() {
+                  _siraParselIdx = 0;
+                  _mod = KrokiModu.siraOlusturma;
+                }),
+                icon: const Icon(Icons.arrow_forward, size: 16),
+                label: const Text('Sıralar'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white),
+              ),
+            if (_mod == KrokiModu.siraOlusturma &&
+                _parseller.any((p) => p.siralar.isNotEmpty))
+              ElevatedButton.icon(
+                onPressed: () =>
+                    setState(() => _mod = KrokiModu.onizleme),
+                icon: const Icon(Icons.visibility, size: 16),
+                label: const Text('Önizle'),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white),
+              ),
+            if (_mod == KrokiModu.onizleme)
+              ElevatedButton.icon(
+                onPressed: _isSaving ? null : _saveAll,
                 icon: _isSaving
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.save, size: 18),
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.save, size: 16),
                 label: const Text('Kaydet'),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    foregroundColor: Colors.white),
               ),
           ],
         ),
@@ -452,121 +1302,125 @@ class _KrokiScreenState extends State<KrokiScreen> {
     );
   }
 
-  bool _canAdvance() {
-    if (_asama == KrokiAsama.cizim) return _rawPoints.length >= 3;
-    if (_asama == KrokiAsama.duzeltme) return _cleanPoints.length >= 3;
-    return false;
-  }
-
-  void _ileriGit() {
-    if (_asama == KrokiAsama.cizim) {
-      // Çizim → Düzeltme: noktaları kopyala
-      _cleanPoints = List<Offset>.from(_rawPoints);
-      _simplifyPoints();
-      setState(() => _asama = KrokiAsama.duzeltme);
-    } else if (_asama == KrokiAsama.duzeltme) {
-      // Düzeltme → Metre Girişi
-      _kenarMetreleri = List.filled(_cleanPoints.length, 0.0);
-      _initMetreControllers();
-      setState(() => _asama = KrokiAsama.metreGirisi);
-    }
-  }
-
-  void _geriDon() {
-    if (_asama == KrokiAsama.duzeltme) {
-      setState(() => _asama = KrokiAsama.cizim);
-    } else if (_asama == KrokiAsama.metreGirisi) {
-      setState(() => _asama = KrokiAsama.duzeltme);
-    }
-  }
-
-  /// Douglas-Peucker benzeri basitleştirme — çok yakın noktaları ele
-  void _simplifyPoints() {
-    if (_cleanPoints.length <= 3) return;
-
-    final simplified = <Offset>[_cleanPoints.first];
-    const minDistance = 25.0; // minimum 25px aralık
-
-    for (int i = 1; i < _cleanPoints.length; i++) {
-      if ((_cleanPoints[i] - simplified.last).distance >= minDistance) {
-        simplified.add(_cleanPoints[i]);
-      }
-    }
-
-    // Son nokta ile ilk nokta çok yakınsa sondakini çıkar
-    if (simplified.length > 3 && (simplified.last - simplified.first).distance < minDistance) {
-      simplified.removeLast();
-    }
-
-    if (simplified.length >= 3) {
-      _cleanPoints = simplified;
-    }
-  }
-
-  /// Piksel noktalardan metrik BahceKose listesi oluştur
-  List<BahceKose> _buildKoseler() {
-    // Piksel koordinatları normalize et (sol-üst 0,0 referans, metre oranıyla)
-    if (_cleanPoints.isEmpty) return [];
-
-    // Tüm metrelerin ortalaması ile piksel↔metre oranı bul
-    double totalPixelPerimeter = 0;
-    double totalMetrePerimeter = 0;
-
-    for (int i = 0; i < _cleanPoints.length; i++) {
-      final j = (i + 1) % _cleanPoints.length;
-      totalPixelPerimeter += (_cleanPoints[j] - _cleanPoints[i]).distance;
-      totalMetrePerimeter += _kenarMetreleri[i];
-    }
-
-    // Eğer metre girilmemişse, piksel = metre say
-    final pixelToMetre = totalMetrePerimeter > 0 ? totalMetrePerimeter / totalPixelPerimeter : 0.1;
-
-    // Min x,y bul
-    double minX = double.infinity, minY = double.infinity;
-    for (final p in _cleanPoints) {
-      minX = min(minX, p.dx);
-      minY = min(minY, p.dy);
-    }
-
-    return List.generate(_cleanPoints.length, (i) {
-      return BahceKose(
-        x: (_cleanPoints[i].dx - minX) * pixelToMetre,
-        y: (_cleanPoints[i].dy - minY) * pixelToMetre,
-        metraj: _kenarMetreleri[i],
-      );
-    });
-  }
-
-  double _calculateArea() {
-    final koseler = _buildKoseler();
-    if (koseler.length < 3) return 0;
-    double area = 0;
-    for (int i = 0; i < koseler.length; i++) {
-      final j = (i + 1) % koseler.length;
-      area += koseler[i].x * koseler[j].y;
-      area -= koseler[j].x * koseler[i].y;
-    }
-    return area.abs() / 2;
-  }
-
-  Future<void> _saveCroquis() async {
+  // ─── KAYDET ─────────────────────────────────────────────
+  Future<void> _saveAll() async {
     setState(() => _isSaving = true);
     try {
-      final koseler = _buildKoseler();
+      final pxPerMetre = _calcGlobalPxPerMetre();
+
+      // Bahçe köşeleri
+      final bahceKoseler = _buildKoselerFromPoints(
+          _bahcePoints, _bahceMetreler, pxPerMetre);
+
+      // Parseller
+      final parseller = <Parsel>[];
+      for (final p in _parseller) {
+        final parselKoseler = _buildKoselerFromPoints(
+            p.points, p.metreler, pxPerMetre);
+        parseller.add(Parsel(
+          ad: p.ad,
+          siraSayisi: p.siralar.length,
+          siraBasinaSaksi:
+              p.siralar.isNotEmpty ? p.siralar.first.saksiSayisi : 0,
+          cins: p.cins,
+          siralar: p.siralar,
+          koseler: parselKoseler,
+          siraAraligi: p.siraAraligi,
+          saksiAraligi: p.saksiAraligi,
+          siraAcisi: p.siraAcisi,
+        ));
+      }
+
+      // Alan hesapla (Shoelace formülü)
+      double alan = 0;
+      if (bahceKoseler.length >= 3) {
+        for (int i = 0; i < bahceKoseler.length; i++) {
+          final j = (i + 1) % bahceKoseler.length;
+          alan += bahceKoseler[i].x * bahceKoseler[j].y;
+          alan -= bahceKoseler[j].x * bahceKoseler[i].y;
+        }
+        alan = alan.abs() / 2;
+      }
+
       await _service.updateBahce(widget.bahce.copyWith(
-        koseler: koseler,
-        toplamAlan: _calculateArea(),
+        koseler: bahceKoseler,
+        parseller: parseller,
+        toplamAlan: alan,
       ));
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kroki kaydedildi ✓')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Kroki ve parseller kaydedildi ✓')));
         Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Hata: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Hata: $e')));
       }
     }
     setState(() => _isSaving = false);
+  }
+
+  List<BahceKose> _buildKoselerFromPoints(
+      List<Offset> points, List<double> metreler, double pxPerMetre) {
+    if (points.isEmpty) return [];
+    double minX = double.infinity, minY = double.infinity;
+    for (final p in points) {
+      minX = min(minX, p.dx);
+      minY = min(minY, p.dy);
+    }
+
+    return List.generate(points.length, (i) {
+      final gpsPos =
+          i < _gpsPositions.length ? _gpsPositions[i] : null;
+      return BahceKose(
+        x: (points[i].dx - minX) / pxPerMetre,
+        y: (points[i].dy - minY) / pxPerMetre,
+        metraj: i < metreler.length ? metreler[i] : 0,
+        lat: gpsPos?.latitude,
+        lng: gpsPos?.longitude,
+        gpsMetraj:
+            i < _gpsDistances.length ? _gpsDistances[i] : null,
+      );
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PARSEL DATA (çalışma belleği)
+// ═══════════════════════════════════════════════════════════
+
+class _ParselData {
+  String ad;
+  String? cins;
+  List<Offset> points = [];
+  List<double> metreler = [];
+  List<TextEditingController> metreCtrl = [];
+  double siraAraligi;
+  double saksiAraligi;
+  double? siraAcisi;
+  List<Sira> siralar;
+
+  _ParselData({
+    required this.ad,
+    this.cins,
+    this.siraAraligi = 1.0,
+    this.saksiAraligi = 0.4,
+    this.siraAcisi,
+    List<Sira>? siralar,
+  }) : siralar = siralar ?? [];
+
+  void initMetreCtrl() {
+    for (final c in metreCtrl) {
+      c.dispose();
+    }
+    metreCtrl = List.generate(
+      metreler.length,
+      (i) => TextEditingController(
+        text: metreler[i] > 0 ? metreler[i].toStringAsFixed(1) : '',
+      ),
+    );
   }
 }
 
@@ -574,196 +1428,553 @@ class _KrokiScreenState extends State<KrokiScreen> {
 // PAINTERS
 // ═══════════════════════════════════════════════════════════
 
-/// Aşama 1: Çizim — noktalar ve çizgiler
-class _CizimPainter extends CustomPainter {
+/// 1) Bahçe sınırı çizim painter
+class _BahceSinirPainter extends CustomPainter {
   final List<Offset> points;
-  _CizimPainter({required this.points});
+  final int? dragging;
+  _BahceSinirPainter({required this.points, this.dragging});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
 
-    // Çizgiler
-    final linePaint = Paint()
-      ..color = const Color(0xFFD97706)
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round;
-
-    if (points.length >= 2) {
-      final path = Path()..moveTo(points.first.dx, points.first.dy);
-      for (int i = 1; i < points.length; i++) {
-        path.lineTo(points[i].dx, points[i].dy);
-      }
-      // Kapatma çizgisi (şeffaf)
-      if (points.length >= 3) {
-        final closePaint = Paint()
-          ..color = const Color(0xFFD97706).withOpacity(0.3)
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round;
-        canvas.drawLine(points.last, points.first, closePaint);
-
-        // İçini hafif doldur
-        final fillPath = Path()..moveTo(points.first.dx, points.first.dy);
-        for (final p in points.skip(1)) {
-          fillPath.lineTo(p.dx, p.dy);
-        }
-        fillPath.close();
-        canvas.drawPath(fillPath, Paint()..color = const Color(0xFFD97706).withOpacity(0.06));
-      }
-      canvas.drawPath(path, linePaint);
-    }
-
-    // Noktalar
-    for (int i = 0; i < points.length; i++) {
-      canvas.drawCircle(points[i], 8, Paint()..color = Colors.white);
-      canvas.drawCircle(points[i], 8, Paint()
-        ..color = const Color(0xFFD97706)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5);
-      canvas.drawCircle(points[i], 4, Paint()..color = const Color(0xFFD97706));
-
-      // Numara
-      final tp = TextPainter(
-        text: TextSpan(text: '${i + 1}', style: const TextStyle(color: Color(0xFFD97706), fontSize: 11, fontWeight: FontWeight.bold)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, points[i] + const Offset(12, -16));
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CizimPainter old) => true;
-}
-
-/// Aşama 2: Düzeltme — sürüklenebilir köşeler
-class _DuzeltmePainter extends CustomPainter {
-  final List<Offset> points;
-  final int? draggingIndex;
-  _DuzeltmePainter({required this.points, this.draggingIndex});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
-
-    // İçini doldur
+    // Polygon dolgu + kenar
     if (points.length >= 3) {
-      final fillPath = Path()..moveTo(points.first.dx, points.first.dy);
+      final path = Path()
+        ..moveTo(points.first.dx, points.first.dy);
       for (final p in points.skip(1)) {
-        fillPath.lineTo(p.dx, p.dy);
+        path.lineTo(p.dx, p.dy);
       }
-      fillPath.close();
-      canvas.drawPath(fillPath, Paint()..color = const Color(0xFFD97706).withOpacity(0.08));
-      canvas.drawPath(fillPath, Paint()
-        ..color = const Color(0xFFD97706)
-        ..strokeWidth = 2.5
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round);
+      path.close();
+      canvas.drawPath(
+          path, Paint()..color = Colors.red.withOpacity(0.05));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = Colors.red
+            ..strokeWidth = 2.5
+            ..style = PaintingStyle.stroke
+            ..strokeJoin = StrokeJoin.round);
+    } else if (points.length == 2) {
+      canvas.drawLine(
+          points[0],
+          points[1],
+          Paint()
+            ..color = Colors.red
+            ..strokeWidth = 2.5);
     }
 
-    // Noktalar (büyük, sürüklenebilir görünüm)
+    // Kapama çizgisi (şeffaf)
+    if (points.length >= 3) {
+      canvas.drawLine(
+          points.last,
+          points.first,
+          Paint()
+            ..color = Colors.red.withOpacity(0.3)
+            ..strokeWidth = 2
+            ..strokeCap = StrokeCap.round);
+    }
+
+    // Köşeler
     for (int i = 0; i < points.length; i++) {
-      final isDragging = i == draggingIndex;
-      final radius = isDragging ? 14.0 : 10.0;
-
-      // Dış halka
-      canvas.drawCircle(points[i], radius + 4, Paint()..color = const Color(0xFFD97706).withOpacity(0.15));
-      // Beyaz dolgu
-      canvas.drawCircle(points[i], radius, Paint()..color = Colors.white);
-      // Turuncu kenar
-      canvas.drawCircle(points[i], radius, Paint()
-        ..color = isDragging ? Colors.deepOrange : const Color(0xFFD97706)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3);
-      // İç nokta
-      canvas.drawCircle(points[i], 4, Paint()..color = isDragging ? Colors.deepOrange : const Color(0xFFD97706));
-
-      // Numara
-      final tp = TextPainter(
-        text: TextSpan(text: '${i + 1}', style: TextStyle(
-          color: isDragging ? Colors.deepOrange : const Color(0xFFD97706),
-          fontSize: 12, fontWeight: FontWeight.bold)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, points[i] + Offset(radius + 4, -16));
+      final isDrag = i == dragging;
+      final r = isDrag ? 14.0 : 10.0;
+      canvas.drawCircle(
+          points[i], r + 4, Paint()..color = Colors.red.withOpacity(0.12));
+      canvas.drawCircle(points[i], r, Paint()..color = Colors.white);
+      canvas.drawCircle(
+          points[i],
+          r,
+          Paint()
+            ..color = isDrag ? Colors.deepOrange : Colors.red
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2.5);
+      canvas.drawCircle(points[i], 4, Paint()..color = Colors.red);
+      _drawLabel(
+          canvas, points[i] + Offset(r + 4, -14), '${i + 1}', Colors.red);
     }
+  }
 
-    // İpucu yazısı
-    final hintPainter = TextPainter(
+  void _drawLabel(Canvas canvas, Offset pos, String text, Color color) {
+    final tp = TextPainter(
       text: TextSpan(
-        text: '👆 Köşeleri sürükleyin  •  2× tıkla: yeni köşe  •  Uzun bas: sil',
-        style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
-      ),
+          text: text,
+          style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold)),
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: size.width - 32);
-    hintPainter.paint(canvas, Offset((size.width - hintPainter.width) / 2, size.height - 30));
+    )..layout();
+    tp.paint(canvas, pos);
   }
 
   @override
-  bool shouldRepaint(covariant _DuzeltmePainter old) => true;
+  bool shouldRepaint(covariant _BahceSinirPainter old) => true;
 }
 
-/// Aşama 3: Metre gösterimi
-class _MetrePainter extends CustomPainter {
-  final List<Offset> points;
-  final List<double> metreler;
-  _MetrePainter({required this.points, required this.metreler});
+/// 2) Parsel çizim painter
+class _ParselCizimPainter extends CustomPainter {
+  final List<Offset> bahcePoints;
+  final List<_ParselData> parseller;
+  final int activeIdx;
+  final int? draggingParselIdx;
+  final int? draggingKoseIdx;
+
+  _ParselCizimPainter({
+    required this.bahcePoints,
+    required this.parseller,
+    required this.activeIdx,
+    this.draggingParselIdx,
+    this.draggingKoseIdx,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (points.length < 3) return;
-
-    // İçini doldur
-    final fillPath = Path()..moveTo(points.first.dx, points.first.dy);
-    for (final p in points.skip(1)) {
-      fillPath.lineTo(p.dx, p.dy);
-    }
-    fillPath.close();
-    canvas.drawPath(fillPath, Paint()..color = const Color(0xFFD97706).withOpacity(0.08));
-    canvas.drawPath(fillPath, Paint()
-      ..color = const Color(0xFFD97706)
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke);
-
-    // Kenar bilgileri
-    for (int i = 0; i < points.length; i++) {
-      final j = (i + 1) % points.length;
-      final mid = (points[i] + points[j]) / 2;
-      final metre = metreler.length > i ? metreler[i] : 0.0;
-      final label = metre > 0 ? '${metre.toStringAsFixed(1)}m' : '?';
-
-      // Arka plan
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromCenter(center: mid, width: 52, height: 20), const Radius.circular(5)),
-        Paint()..color = metre > 0 ? Colors.white.withOpacity(0.9) : Colors.orange.shade50.withOpacity(0.9),
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromCenter(center: mid, width: 52, height: 20), const Radius.circular(5)),
-        Paint()..color = metre > 0 ? const Color(0xFFD97706).withOpacity(0.3) : Colors.red.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 1,
-      );
-
-      final tp = TextPainter(
-        text: TextSpan(text: label, style: TextStyle(
-          color: metre > 0 ? const Color(0xFFD97706) : Colors.red, fontSize: 11, fontWeight: FontWeight.w700)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2));
+    // Bahçe sınırı (soluk)
+    if (bahcePoints.length >= 3) {
+      final path = Path()
+        ..moveTo(bahcePoints.first.dx, bahcePoints.first.dy);
+      for (final p in bahcePoints.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      path.close();
+      canvas.drawPath(
+          path, Paint()..color = Colors.red.withOpacity(0.04));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = Colors.red.withOpacity(0.4)
+            ..strokeWidth = 2
+            ..style = PaintingStyle.stroke);
     }
 
-    // Köşe noktaları
-    for (int i = 0; i < points.length; i++) {
-      canvas.drawCircle(points[i], 6, Paint()..color = Colors.white);
-      canvas.drawCircle(points[i], 6, Paint()..color = const Color(0xFFD97706)..style = PaintingStyle.stroke..strokeWidth = 2);
+    // Parseller
+    for (int pi = 0; pi < parseller.length; pi++) {
+      final p = parseller[pi];
+      if (p.points.length < 2) continue;
+      final isActive = pi == activeIdx;
+      final color = isActive
+          ? const Color(0xFF059669)
+          : const Color(0xFF059669).withOpacity(0.4);
 
-      final tp = TextPainter(
-        text: TextSpan(text: '${i + 1}', style: const TextStyle(color: Color(0xFFD97706), fontSize: 11, fontWeight: FontWeight.bold)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      tp.paint(canvas, points[i] + const Offset(10, -14));
+      if (p.points.length >= 3) {
+        final path = Path()
+          ..moveTo(p.points.first.dx, p.points.first.dy);
+        for (final pt in p.points.skip(1)) {
+          path.lineTo(pt.dx, pt.dy);
+        }
+        path.close();
+        canvas.drawPath(
+            path, Paint()..color = color.withOpacity(0.06));
+        canvas.drawPath(
+            path,
+            Paint()
+              ..color = color
+              ..strokeWidth = 2
+              ..style = PaintingStyle.stroke
+              ..strokeJoin = StrokeJoin.round);
+      } else {
+        canvas.drawLine(
+            p.points[0],
+            p.points[1],
+            Paint()
+              ..color = color
+              ..strokeWidth = 2);
+      }
+
+      // Köşeler
+      for (int ki = 0; ki < p.points.length; ki++) {
+        final isDrag =
+            pi == draggingParselIdx && ki == draggingKoseIdx;
+        final r = isDrag ? 12.0 : 8.0;
+        canvas.drawCircle(
+            p.points[ki], r, Paint()..color = Colors.white);
+        canvas.drawCircle(
+            p.points[ki],
+            r,
+            Paint()
+              ..color = color
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2);
+        canvas.drawCircle(
+            p.points[ki], 3, Paint()..color = color);
+      }
+
+      // Parsel adı
+      if (p.points.length >= 3) {
+        final center = p.points.reduce((a, b) => a + b) /
+            p.points.length.toDouble();
+        final tp = TextPainter(
+          text: TextSpan(
+              text: p.ad,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas,
+            Offset(center.dx - tp.width / 2, center.dy - tp.height / 2));
+      }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _MetrePainter old) => true;
+  bool shouldRepaint(covariant _ParselCizimPainter old) => true;
+}
+
+/// 3) Sıra painter — parseller + paralel sıra çizgileri
+class _SiraPainter extends CustomPainter {
+  final List<Offset> bahcePoints;
+  final List<_ParselData> parseller;
+  final int activeParselIdx;
+  final double pxPerMetre;
+
+  _SiraPainter({
+    required this.bahcePoints,
+    required this.parseller,
+    required this.activeParselIdx,
+    required this.pxPerMetre,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Bahçe sınırı
+    if (bahcePoints.length >= 3) {
+      final path = Path()
+        ..moveTo(bahcePoints.first.dx, bahcePoints.first.dy);
+      for (final p in bahcePoints.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      path.close();
+      canvas.drawPath(
+          path, Paint()..color = Colors.red.withOpacity(0.03));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = Colors.red.withOpacity(0.3)
+            ..strokeWidth = 1.5
+            ..style = PaintingStyle.stroke);
+    }
+
+    // Parseller ve sıraları
+    for (int pi = 0; pi < parseller.length; pi++) {
+      final p = parseller[pi];
+      if (p.points.length < 3) continue;
+      final isActive = pi == activeParselIdx;
+      final parselColor = isActive
+          ? const Color(0xFF059669)
+          : const Color(0xFF059669).withOpacity(0.3);
+
+      // Parsel sınırı
+      final path = Path()
+        ..moveTo(p.points.first.dx, p.points.first.dy);
+      for (final pt in p.points.skip(1)) {
+        path.lineTo(pt.dx, pt.dy);
+      }
+      path.close();
+      canvas.drawPath(
+          path, Paint()..color = parselColor.withOpacity(0.04));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = parselColor
+            ..strokeWidth = 2
+            ..style = PaintingStyle.stroke);
+
+      // Sıraları çiz
+      if (p.siralar.isNotEmpty) {
+        _drawRows(canvas, p, isActive);
+      }
+
+      // Parsel adı
+      final center = p.points.reduce((a, b) => a + b) /
+          p.points.length.toDouble();
+      final tp = TextPainter(
+        text: TextSpan(
+            text: p.ad,
+            style: TextStyle(
+                color: parselColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(
+          canvas,
+          Offset(center.dx - tp.width / 2,
+              center.dy - tp.height / 2 - 10));
+    }
+  }
+
+  void _drawRows(Canvas canvas, _ParselData p, bool highlight) {
+    final acisi = (p.siraAcisi ?? 0) * pi / 180;
+    final dirX = cos(acisi);
+    final dirY = sin(acisi);
+    final perpX = -dirY;
+    final perpY = dirX;
+
+    double minProj = double.infinity, maxProj = -double.infinity;
+    for (final pt in p.points) {
+      final proj = pt.dx * perpX + pt.dy * perpY;
+      minProj = min(minProj, proj);
+      maxProj = max(maxProj, proj);
+    }
+
+    // pxPerM
+    double totalPx = 0, totalM = 0;
+    for (int i = 0; i < p.points.length; i++) {
+      final j = (i + 1) % p.points.length;
+      totalPx += (p.points[j] - p.points[i]).distance;
+      totalM += (i < p.metreler.length) ? p.metreler[i] : 0;
+    }
+    final pxPerM = totalM > 0 ? totalPx / totalM : pxPerMetre;
+    final aralPx = p.siraAraligi * pxPerM;
+    if (aralPx <= 0) return;
+
+    final rowPaint = Paint()
+      ..color = highlight
+          ? Colors.purple
+          : Colors.purple.withOpacity(0.3)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    int siraNo = 1;
+    for (double proj = minProj + aralPx / 2;
+        proj <= maxProj - aralPx / 2;
+        proj += aralPx) {
+      final intersections = <Offset>[];
+      for (int i = 0; i < p.points.length; i++) {
+        final jj = (i + 1) % p.points.length;
+        final a = p.points[i];
+        final b = p.points[jj];
+        final projA = a.dx * perpX + a.dy * perpY;
+        final projB = b.dx * perpX + b.dy * perpY;
+        if ((projA <= proj && projB >= proj) ||
+            (projA >= proj && projB <= proj)) {
+          if ((projB - projA).abs() < 0.001) continue;
+          final t = (proj - projA) / (projB - projA);
+          intersections.add(Offset(
+              a.dx + t * (b.dx - a.dx), a.dy + t * (b.dy - a.dy)));
+        }
+      }
+      if (intersections.length >= 2) {
+        intersections.sort((a, b) =>
+            (a.dx * dirX + a.dy * dirY)
+                .compareTo(b.dx * dirX + b.dy * dirY));
+        canvas.drawLine(
+            intersections.first, intersections.last, rowPaint);
+
+        // Sıra numarası
+        if (highlight) {
+          final mid =
+              (intersections.first + intersections.last) / 2;
+          final tp = TextPainter(
+            text: TextSpan(
+                text: '$siraNo',
+                style: TextStyle(
+                    color: Colors.purple.withOpacity(0.6),
+                    fontSize: 8)),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          tp.paint(canvas,
+              Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2));
+        }
+        siraNo++;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SiraPainter old) => true;
+}
+
+/// 4) Önizleme — tüm katmanlar
+class _OnizlemePainter extends CustomPainter {
+  final List<Offset> bahcePoints;
+  final List<_ParselData> parseller;
+  final double pxPerMetre;
+  final List<double> bahceMetreler;
+
+  _OnizlemePainter({
+    required this.bahcePoints,
+    required this.parseller,
+    required this.pxPerMetre,
+    required this.bahceMetreler,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Bahçe sınırı — kırmızı
+    if (bahcePoints.length >= 3) {
+      final path = Path()
+        ..moveTo(bahcePoints.first.dx, bahcePoints.first.dy);
+      for (final p in bahcePoints.skip(1)) {
+        path.lineTo(p.dx, p.dy);
+      }
+      path.close();
+      canvas.drawPath(
+          path, Paint()..color = Colors.red.withOpacity(0.04));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = Colors.red
+            ..strokeWidth = 3
+            ..style = PaintingStyle.stroke
+            ..strokeJoin = StrokeJoin.round);
+
+      // Kenar metre etiketleri
+      for (int i = 0; i < bahcePoints.length; i++) {
+        final j = (i + 1) % bahcePoints.length;
+        final mid = (bahcePoints[i] + bahcePoints[j]) / 2;
+        final metre =
+            i < bahceMetreler.length ? bahceMetreler[i] : 0.0;
+        if (metre > 0) {
+          final bg = Paint()..color = Colors.white.withOpacity(0.9);
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: mid, width: 50, height: 18),
+              const Radius.circular(4),
+            ),
+            bg,
+          );
+          final tp = TextPainter(
+            text: TextSpan(
+                text: '${metre.toStringAsFixed(1)}m',
+                style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600)),
+            textDirection: TextDirection.ltr,
+          )..layout();
+          tp.paint(canvas,
+              Offset(mid.dx - tp.width / 2, mid.dy - tp.height / 2));
+        }
+      }
+
+      // Köşeler
+      for (int i = 0; i < bahcePoints.length; i++) {
+        canvas.drawCircle(
+            bahcePoints[i], 5, Paint()..color = Colors.white);
+        canvas.drawCircle(
+            bahcePoints[i],
+            5,
+            Paint()
+              ..color = Colors.red
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2);
+      }
+    }
+
+    // Parseller — yeşil + sıralar — mor
+    for (final p in parseller) {
+      if (p.points.length < 3) continue;
+
+      // Parsel kenarları
+      final path = Path()
+        ..moveTo(p.points.first.dx, p.points.first.dy);
+      for (final pt in p.points.skip(1)) {
+        path.lineTo(pt.dx, pt.dy);
+      }
+      path.close();
+      canvas.drawPath(path,
+          Paint()..color = const Color(0xFF059669).withOpacity(0.06));
+      canvas.drawPath(
+          path,
+          Paint()
+            ..color = const Color(0xFF059669)
+            ..strokeWidth = 2
+            ..style = PaintingStyle.stroke);
+
+      // Parsel adı
+      final center = p.points.reduce((a, b) => a + b) /
+          p.points.length.toDouble();
+      final nameTp = TextPainter(
+        text: TextSpan(
+            text: p.ad,
+            style: const TextStyle(
+                color: Color(0xFF059669),
+                fontSize: 14,
+                fontWeight: FontWeight.bold)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+              center: center,
+              width: nameTp.width + 12,
+              height: nameTp.height + 6),
+          const Radius.circular(6),
+        ),
+        Paint()..color = Colors.white.withOpacity(0.85),
+      );
+      nameTp.paint(
+          canvas,
+          Offset(center.dx - nameTp.width / 2,
+              center.dy - nameTp.height / 2));
+
+      // Sıralar
+      if (p.siralar.isNotEmpty) {
+        _drawSiralar(canvas, p);
+      }
+    }
+  }
+
+  void _drawSiralar(Canvas canvas, _ParselData p) {
+    final acisi = (p.siraAcisi ?? 0) * pi / 180;
+    final dirX = cos(acisi);
+    final dirY = sin(acisi);
+    final perpX = -dirY;
+    final perpY = dirX;
+
+    double minProj = double.infinity, maxProj = -double.infinity;
+    for (final pt in p.points) {
+      final proj = pt.dx * perpX + pt.dy * perpY;
+      minProj = min(minProj, proj);
+      maxProj = max(maxProj, proj);
+    }
+
+    double totalPx = 0, totalM = 0;
+    for (int i = 0; i < p.points.length; i++) {
+      final j = (i + 1) % p.points.length;
+      totalPx += (p.points[j] - p.points[i]).distance;
+      totalM += (i < p.metreler.length) ? p.metreler[i] : 0;
+    }
+    final pxPerM = totalM > 0 ? totalPx / totalM : pxPerMetre;
+    final aralPx = p.siraAraligi * pxPerM;
+    if (aralPx <= 0) return;
+
+    final rowPaint = Paint()
+      ..color = Colors.purple.withOpacity(0.5)
+      ..strokeWidth = 1;
+
+    for (double proj = minProj + aralPx / 2;
+        proj <= maxProj - aralPx / 2;
+        proj += aralPx) {
+      final intersections = <Offset>[];
+      for (int i = 0; i < p.points.length; i++) {
+        final jj = (i + 1) % p.points.length;
+        final a = p.points[i];
+        final b = p.points[jj];
+        final projA = a.dx * perpX + a.dy * perpY;
+        final projB = b.dx * perpX + b.dy * perpY;
+        if ((projA <= proj && projB >= proj) ||
+            (projA >= proj && projB <= proj)) {
+          if ((projB - projA).abs() < 0.001) continue;
+          final t = (proj - projA) / (projB - projA);
+          intersections.add(Offset(
+              a.dx + t * (b.dx - a.dx), a.dy + t * (b.dy - a.dy)));
+        }
+      }
+      if (intersections.length >= 2) {
+        intersections.sort((a, b) =>
+            (a.dx * dirX + a.dy * dirY)
+                .compareTo(b.dx * dirX + b.dy * dirY));
+        canvas.drawLine(
+            intersections.first, intersections.last, rowPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _OnizlemePainter old) => true;
 }

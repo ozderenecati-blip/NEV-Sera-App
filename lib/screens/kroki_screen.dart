@@ -178,35 +178,40 @@ class _KrokiScreenState extends State<KrokiScreen> {
     final rangeX = maxX - minX;
     final rangeY = maxY - minY;
     final maxRange = max(rangeX, rangeY);
-    final scale =
+    // Kaydetme sırasında pxPerMetre kullanıldı.
+    // Yüklerken aynı oranla geri çevirmeliyiz.
+    // Metre/piksel oranını bahçe kenar metreleri + metre koordinatlarından hesapla
+    // pxPerMetre_save = toplamPiksel / toplamMetre idi
+    // metre_koordinat = (piksel - centroid) / pxPerMetre_save
+    // Geri: piksel = metre_koordinat * pxPerMetre_load + screenCenter
+    // pxPerMetre_load = min(targetW, targetH) / maxRange (fit-to-screen)
+    final pxPerMetre =
         maxRange > 0 ? min(targetW, targetH) / maxRange : 1.0;
-    // Merkez: görünür alanın ortası
     final centerX = _canvasSize.width / 2;
     final centerY = _canvasSize.height / 2;
 
-    // Koordinatlar merkez-tabanlı kaydedildiği için:
-    // x,y = (px - cx_of_points) / pxPerMetre → geri: px = x * scale + centerX
-    // (x zaten 0 merkezli kaydedildi, doğrudan scale ile çarp)
+    // Tüm koordinatlar bahçe centroid'e göre kaydedildi (centroid = 0,0)
+    // px = x * pxPerMetre + screenCenter
     _bahcePoints = koseler
         .map((k) => Offset(
-              k.x * scale + centerX,
-              k.y * scale + centerY,
+              k.x * pxPerMetre + centerX,
+              k.y * pxPerMetre + centerY,
             ))
         .toList();
     _bahceMetreler = koseler.map((k) => k.metraj).toList();
     _initBahceMetreCtrl();
 
-    // Parsel köşelerini aynı scale/center ile yükle
+    // Parsel köşelerini AYNI pxPerMetre ve AYNI centerX/Y ile yükle
+    // (parseller de bahçe centroid'e göre kaydedildi)
     for (int pi = 0;
         pi < _parseller.length && pi < widget.bahce.parseller.length;
         pi++) {
       final pKoseler = widget.bahce.parseller[pi].koseler;
       if (pKoseler.isNotEmpty) {
-        // Aynı koordinat sistemi: x * scale + centerX
         _parseller[pi].points = pKoseler
             .map((k) => Offset(
-                  k.x * scale + centerX,
-                  k.y * scale + centerY,
+                  k.x * pxPerMetre + centerX,
+                  k.y * pxPerMetre + centerY,
                 ))
             .toList();
         _parseller[pi].metreler =
@@ -518,9 +523,13 @@ class _KrokiScreenState extends State<KrokiScreen> {
             minScale: 0.3,
             maxScale: 5.0,
             boundaryMargin: const EdgeInsets.all(300),
+            panEnabled: _draggingBahceIdx == null, // drag sırasında kaydırma kapalı
             child: GestureDetector(
               onTapDown: (d) {
                 final pos = d.localPosition;
+                // Yakın köşe var mı kontrol et (sürüklemek için)
+                final hitIdx = _findNearBahceKose(pos);
+                if (hitIdx >= 0) return; // drag'da handle edilecek
                 setState(() {
                   _bahcePoints.add(pos);
                   _bahceMetreler.add(0);
@@ -528,6 +537,30 @@ class _KrokiScreenState extends State<KrokiScreen> {
                   _gpsDistances.add(null);
                   _initBahceMetreCtrl();
                 });
+              },
+              onLongPressStart: (d) {
+                final idx = _findNearBahceKose(d.localPosition);
+                if (idx >= 0) {
+                  setState(() => _draggingBahceIdx = idx);
+                }
+              },
+              onLongPressMoveUpdate: (d) {
+                if (_draggingBahceIdx != null) {
+                  setState(() {
+                    _bahcePoints[_draggingBahceIdx!] = d.localPosition;
+                  });
+                }
+              },
+              onLongPressEnd: (_) {
+                if (_draggingBahceIdx != null) {
+                  setState(() => _draggingBahceIdx = null);
+                }
+              },
+              onDoubleTapDown: (d) {
+                final idx = _findNearBahceKose(d.localPosition);
+                if (idx >= 0 && _bahcePoints.length > 1) {
+                  _showKoseSilDialog(idx, isBahce: true);
+                }
               },
               child: Container(
                 width: 2000,
@@ -756,16 +789,52 @@ class _KrokiScreenState extends State<KrokiScreen> {
             minScale: 0.3,
             maxScale: 5.0,
             boundaryMargin: const EdgeInsets.all(300),
+            panEnabled: _draggingParselKoseIdx == null,
             child: GestureDetector(
               onTapDown: (d) {
                 if (_activeParselIdx >= 0 &&
                     _activeParselIdx < _parseller.length) {
                   final pos = d.localPosition;
+                  // Yakın köşe var mı kontrol et
+                  final hitIdx = _findNearParselKose(pos, _activeParselIdx);
+                  if (hitIdx >= 0) return;
                   setState(() {
                     _parseller[_activeParselIdx].points.add(pos);
                     _parseller[_activeParselIdx].metreler.add(0);
                     _parseller[_activeParselIdx].initMetreCtrl();
                   });
+                }
+              },
+              onLongPressStart: (d) {
+                if (_activeParselIdx >= 0 && _activeParselIdx < _parseller.length) {
+                  final idx = _findNearParselKose(d.localPosition, _activeParselIdx);
+                  if (idx >= 0) {
+                    setState(() {
+                      _draggingParselIdx = _activeParselIdx;
+                      _draggingParselKoseIdx = idx;
+                    });
+                  }
+                }
+              },
+              onLongPressMoveUpdate: (d) {
+                if (_draggingParselIdx != null && _draggingParselKoseIdx != null) {
+                  setState(() {
+                    _parseller[_draggingParselIdx!].points[_draggingParselKoseIdx!] = d.localPosition;
+                  });
+                }
+              },
+              onLongPressEnd: (_) {
+                setState(() {
+                  _draggingParselIdx = null;
+                  _draggingParselKoseIdx = null;
+                });
+              },
+              onDoubleTapDown: (d) {
+                if (_activeParselIdx >= 0 && _activeParselIdx < _parseller.length) {
+                  final idx = _findNearParselKose(d.localPosition, _activeParselIdx);
+                  if (idx >= 0 && _parseller[_activeParselIdx].points.length > 1) {
+                    _showKoseSilDialog(idx, isBahce: false, parselIdx: _activeParselIdx);
+                  }
                 }
               },
               child: Container(
@@ -1245,6 +1314,58 @@ class _KrokiScreenState extends State<KrokiScreen> {
     );
   }
 
+  // ── Yakın köşe bul (sürükle-bırak için) ──
+  int _findNearBahceKose(Offset pos, {double threshold = 30}) {
+    for (int i = 0; i < _bahcePoints.length; i++) {
+      if ((_bahcePoints[i] - pos).distance < threshold) return i;
+    }
+    return -1;
+  }
+
+  int _findNearParselKose(Offset pos, int parselIdx, {double threshold = 30}) {
+    if (parselIdx < 0 || parselIdx >= _parseller.length) return -1;
+    final pts = _parseller[parselIdx].points;
+    for (int i = 0; i < pts.length; i++) {
+      if ((pts[i] - pos).distance < threshold) return i;
+    }
+    return -1;
+  }
+
+  void _showKoseSilDialog(int koseIdx, {required bool isBahce, int parselIdx = -1}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Köşeyi Sil'),
+        content: Text('${koseIdx + 1}. köşeyi silmek istiyor musunuz?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                if (isBahce) {
+                  _bahcePoints.removeAt(koseIdx);
+                  if (koseIdx < _bahceMetreler.length) _bahceMetreler.removeAt(koseIdx);
+                  if (koseIdx < _gpsPositions.length) _gpsPositions.removeAt(koseIdx);
+                  if (koseIdx < _gpsDistances.length) _gpsDistances.removeAt(koseIdx);
+                  _initBahceMetreCtrl();
+                } else if (parselIdx >= 0 && parselIdx < _parseller.length) {
+                  _parseller[parselIdx].points.removeAt(koseIdx);
+                  if (koseIdx < _parseller[parselIdx].metreler.length) {
+                    _parseller[parselIdx].metreler.removeAt(koseIdx);
+                  }
+                  _parseller[parselIdx].initMetreCtrl();
+                }
+              });
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Kenar uzunluklarına göre noktaları oranla ──
   void _rescaleBahcePoints() {
     if (_bahcePoints.length < 2) return;
@@ -1608,10 +1729,11 @@ class _KrokiScreenState extends State<KrokiScreen> {
     setState(() => _isSaving = true);
     try {
       final pxPerMetre = _calcGlobalPxPerMetre();
+      final centroid = _bahceCentroid();
 
       // Bahçe köşeleri
       final bahceKoseler = _buildKoselerFromPoints(
-          _bahcePoints, _bahceMetreler, pxPerMetre,
+          _bahcePoints, _bahceMetreler, pxPerMetre, centroid,
           includeGps: true);
 
       // Parseller
@@ -1619,7 +1741,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
       for (final p in _parseller) {
         final parselPxPerMetre = _calcParselPxPerMetre(p);
         final parselKoseler = _buildKoselerFromPoints(
-            p.points, p.metreler, parselPxPerMetre > 0 ? parselPxPerMetre : pxPerMetre);
+            p.points, p.metreler, parselPxPerMetre > 0 ? parselPxPerMetre : pxPerMetre, centroid);
         // Sıra cinsini parsel cinsinden ata
         final siralarWithCins = p.siralar.map((s) => s.copyWith(cins: s.cins ?? p.cins)).toList();
         parseller.add(Parsel(
@@ -1667,25 +1789,29 @@ class _KrokiScreenState extends State<KrokiScreen> {
     setState(() => _isSaving = false);
   }
 
+  /// Bahçe centroid (tüm koordinatlar buna göre kaydedilir)
+  Offset _bahceCentroid() {
+    if (_bahcePoints.isEmpty) return Offset.zero;
+    double sx = 0, sy = 0;
+    for (final p in _bahcePoints) {
+      sx += p.dx;
+      sy += p.dy;
+    }
+    return Offset(sx / _bahcePoints.length, sy / _bahcePoints.length);
+  }
+
   List<BahceKose> _buildKoselerFromPoints(
       List<Offset> points, List<double> metreler, double pxPerMetre,
+      Offset globalCentroid,
       {bool includeGps = false}) {
     if (points.isEmpty) return [];
-    // Merkez tabanlı kaydet (load da merkez tabanlı çalışıyor)
-    double sumX = 0, sumY = 0;
-    for (final p in points) {
-      sumX += p.dx;
-      sumY += p.dy;
-    }
-    final cx = sumX / points.length;
-    final cy = sumY / points.length;
 
     return List.generate(points.length, (i) {
       final gpsPos =
           includeGps && i < _gpsPositions.length ? _gpsPositions[i] : null;
       return BahceKose(
-        x: (points[i].dx - cx) / pxPerMetre,
-        y: (points[i].dy - cy) / pxPerMetre,
+        x: (points[i].dx - globalCentroid.dx) / pxPerMetre,
+        y: (points[i].dy - globalCentroid.dy) / pxPerMetre,
         metraj: i < metreler.length ? metreler[i] : 0,
         lat: gpsPos?.latitude,
         lng: gpsPos?.longitude,

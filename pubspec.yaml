@@ -37,7 +37,6 @@ dependencies:
   pdf: ^3.11.1
   printing: ^5.13.4
   geolocator: ^14.0.2
-  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:

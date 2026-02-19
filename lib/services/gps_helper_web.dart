@@ -1,35 +1,79 @@
 import 'dart:async';
 import 'dart:js_interop';
-import 'package:web/web.dart' as web;
 import 'gps_helper.dart';
+
+@JS('navigator.geolocation.getCurrentPosition')
+external void _jsGetCurrentPosition(
+  JSFunction successCallback,
+  JSFunction errorCallback,
+  JSObject options,
+);
 
 Future<GpsKonum> getCurrentPosition() async {
   final completer = Completer<GpsKonum>();
 
-  final successCallback = (web.GeolocationPosition position) {
-    final coords = position.coords;
+  void onSuccess(JSObject position) {
+    final coords = (position as _JSPosition).coords;
     completer.complete(GpsKonum(
-      latitude: coords.latitude.toDouble(),
-      longitude: coords.longitude.toDouble(),
-      accuracy: coords.accuracy.toDouble(),
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
     ));
-  };
+  }
 
-  final errorCallback = (web.GeolocationPositionError error) {
-    completer.completeError('GPS alınamadı: ${error.message} (kod: ${error.code})');
-  };
+  void onError(JSObject error) {
+    final code = (error as _JSPositionError).code;
+    final msg = (error as _JSPositionError).message;
+    completer.completeError('GPS alınamadı: $msg (kod: $code)');
+  }
 
-  final options = web.PositionOptions(
-    enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 0,
-  );
+  final options = _createPositionOptions();
 
-  web.window.navigator.geolocation.getCurrentPosition(
-    successCallback.toJS,
-    errorCallback.toJS,
+  _jsGetCurrentPosition(
+    onSuccess.toJS,
+    onError.toJS,
     options,
   );
 
   return completer.future;
+}
+
+@JS()
+@staticInterop
+extension type _JSPosition._(JSObject _) implements JSObject {
+  external _JSCoords get coords;
+}
+
+@JS()
+@staticInterop
+extension type _JSCoords._(JSObject _) implements JSObject {
+  external double get latitude;
+  external double get longitude;
+  external double get accuracy;
+}
+
+@JS()
+@staticInterop
+extension type _JSPositionError._(JSObject _) implements JSObject {
+  external int get code;
+  external String get message;
+}
+
+@JS('Object')
+external JSObject _createJSObject();
+
+JSObject _createPositionOptions() {
+  final obj = _createJSObject();
+  (obj as _PositionOpts).enableHighAccuracy = true;
+  (obj as _PositionOpts).timeout = 15000;
+  (obj as _PositionOpts).maximumAge = 0;
+  return obj;
+}
+
+@JS()
+@staticInterop
+extension type _PositionOpts._(JSObject _) implements JSObject {
+  external set enableHighAccuracy(bool value);
+  external set timeout(int value);
+  external set maximumAge(int value);
 }

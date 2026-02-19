@@ -205,6 +205,45 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                             child: Text('${idx + 1}', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706), fontWeight: FontWeight.bold))),
                         const SizedBox(width: 10),
                         Expanded(child: Text(is_.aciklama, style: const TextStyle(fontWeight: FontWeight.w500))),
+                        if (!rapor.onaylandi && rapor.kullaniciId == auth.currentUser?.id) ...[
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 18, color: Color(0xFFD97706)),
+                            tooltip: 'Düzenle',
+                            onPressed: () { Navigator.pop(ctx); _showIsKalemiDuzenle(rapor, idx); },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                            tooltip: 'Sil',
+                            onPressed: () async {
+                              final onay = await showDialog<bool>(
+                                context: ctx,
+                                builder: (c) => AlertDialog(
+                                  title: const Text('İş Kalemi Sil'),
+                                  content: Text('"${is_.aciklama}" silinsin mi?'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(c, true),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                      child: const Text('Sil'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (onay == true) {
+                                final guncelIsler = List<IsKalemi>.from(rapor.isler)..removeAt(idx);
+                                await _service.updateDailyReport(rapor.copyWith(isler: guncelIsler));
+                                if (ctx.mounted) Navigator.pop(ctx);
+                                _loadRaporlar();
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İş kalemi silindi')));
+                              }
+                            },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          ),
+                        ],
                       ]),
                       if (is_.kategori != null || is_.bahceAdi != null || is_.sure != null) ...[
                         const SizedBox(height: 8),
@@ -264,6 +303,41 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                     icon: const Icon(Icons.add),
                     label: const Text('İş Kalemi Ekle'),
                     style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  ),
+                ),
+              if (!rapor.onaylandi && rapor.kullaniciId == auth.currentUser?.id)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final onay = await showDialog<bool>(
+                        context: ctx,
+                        builder: (c) => AlertDialog(
+                          title: const Text('Raporu Sil'),
+                          content: const Text('Bu rapor tamamen silinecek. Emin misiniz?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(c, true),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                              child: const Text('Sil'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (onay == true) {
+                        await _service.deleteDailyReport(rapor.id!);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        _loadRaporlar();
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapor silindi')));
+                      }
+                    },
+                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                    label: const Text('Raporu Sil', style: TextStyle(color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
                   ),
                 ),
             ],
@@ -399,6 +473,57 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
               child: const Text('Ekle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showIsKalemiDuzenle(DailyWorkReport rapor, int idx) {
+    final is_ = rapor.isler[idx];
+    final aciklamaCtrl = TextEditingController(text: is_.aciklama);
+    String? kategori = is_.kategori;
+    final sureCtrl = TextEditingController(text: is_.sure?.toStringAsFixed(1) ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('İş Kalemi Düzenle (#${idx + 1})'),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: aciklamaCtrl, decoration: InputDecoration(labelText: 'Açıklama *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<String>(
+              value: kategori,
+              decoration: InputDecoration(labelText: 'Kategori', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              items: _kategoriler.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+              onChanged: (v) => setDialogState(() => kategori = v),
+            ),
+            const SizedBox(height: 14),
+            TextField(controller: sureCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'Süre (saat)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+            ElevatedButton(
+              onPressed: () async {
+                if (aciklamaCtrl.text.trim().isEmpty) return;
+                final guncelIsler = List<IsKalemi>.from(rapor.isler);
+                guncelIsler[idx] = IsKalemi(
+                  aciklama: aciklamaCtrl.text.trim(),
+                  kategori: kategori,
+                  sure: double.tryParse(sureCtrl.text.replaceAll(',', '.')),
+                  bahceAdi: is_.bahceAdi,
+                  parselAdi: is_.parselAdi,
+                  fotograflar: is_.fotograflar,
+                );
+                await _service.updateDailyReport(rapor.copyWith(isler: guncelIsler));
+                if (ctx.mounted) Navigator.pop(ctx);
+                _loadRaporlar();
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İş kalemi güncellendi ✓')));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
+              child: const Text('Güncelle'),
             ),
           ],
         ),

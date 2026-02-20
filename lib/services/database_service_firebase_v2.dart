@@ -66,6 +66,7 @@ class DatabaseService {
         'tl_karsiligi': hareket.tlKarsiligi,
         'islem_kaynagi': hareket.islemKaynagi,
         'iliskili_id': hareket.iliskiliId,
+        'fis_url': hareket.fisUrl,
       });
       return _getIntId('kasa_hareketleri', docRef.id);
     } catch (e) {
@@ -113,6 +114,9 @@ class DatabaseService {
         'para_birimi': hareket.paraBirimi,
         'doviz_kuru': hareket.dovizKuru,
         'tl_karsiligi': hareket.tlKarsiligi,
+        'islem_kaynagi': hareket.islemKaynagi,
+        'iliskili_id': hareket.iliskiliId,
+        'fis_url': hareket.fisUrl,
       });
       return 1;
     } catch (e) {

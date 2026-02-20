@@ -21,10 +21,11 @@ class ModuleSelectionScreen extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
           return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
             child: Column(
@@ -34,22 +35,22 @@ class ModuleSelectionScreen extends StatelessWidget {
                   width: 40, height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: isDark ? Colors.grey.shade600 : Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.settings, color: ThemeProvider.primaryColor),
-                    SizedBox(width: 10),
-                    Text('Ayarlar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const Icon(Icons.settings, color: ThemeProvider.primaryColor),
+                    const SizedBox(width: 10),
+                    Text('Ayarlar', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : null)),
                   ],
                 ),
                 const SizedBox(height: 24),
                 // Tema seçimi
-                const Align(
+                Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Tema', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                  child: Text('Tema', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: isDark ? Colors.white : null)),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -67,7 +68,7 @@ class ModuleSelectionScreen extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Yazı Boyutu: ${(themeProvider.textScale * 100).round()}%',
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15, color: isDark ? Colors.white : null),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -95,7 +96,7 @@ class ModuleSelectionScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
                     'Örnek metin — Bu yazının boyutunu ayarlayabilirsiniz',
-                    style: TextStyle(fontSize: 14 * themeProvider.textScale, color: Colors.grey.shade700),
+                    style: TextStyle(fontSize: 14 * themeProvider.textScale, color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -109,6 +110,7 @@ class ModuleSelectionScreen extends StatelessWidget {
 
   Widget _buildThemeChip(BuildContext context, ThemeProvider provider, ThemeMode mode, String label, IconData icon, StateSetter setModalState) {
     final selected = provider.themeMode == mode;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -118,7 +120,9 @@ class ModuleSelectionScreen extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? ThemeProvider.primaryColor.withOpacity(0.1) : Colors.grey.shade100,
+            color: selected
+                ? ThemeProvider.primaryColor.withValues(alpha: 0.15)
+                : (isDark ? const Color(0xFF374151) : Colors.grey.shade100),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected ? ThemeProvider.primaryColor : Colors.transparent,
@@ -127,12 +131,12 @@ class ModuleSelectionScreen extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Icon(icon, color: selected ? ThemeProvider.primaryColor : Colors.grey.shade500, size: 22),
+              Icon(icon, color: selected ? ThemeProvider.primaryColor : (isDark ? Colors.grey.shade400 : Colors.grey.shade500), size: 22),
               const SizedBox(height: 4),
               Text(label, style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                color: selected ? ThemeProvider.primaryColor : Colors.grey.shade600,
+                color: selected ? ThemeProvider.primaryColor : (isDark ? Colors.grey.shade400 : Colors.grey.shade600),
               )),
             ],
           ),

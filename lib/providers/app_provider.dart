@@ -79,29 +79,31 @@ class AppProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    try {
-      _kasaHareketleri = await _db.getKasaHareketleri();
-      _kasaOzet = await _db.getKasaOzet();
-      _kasaBakiyeleri = await _db.getKasaBakiyeleri();
-      _gundelikciler = await _db.getGundelikciler();
-      _gundelikciOzet = await _db.getGundelikciOzet();
-      _krediler = await _db.getKrediler();
-      _krediOzet = await _db.getKrediOzet();
-      _ortaklar = await _db.getOrtaklar();
-      _ortakOzet = await _db.getOrtakOzet();
-      _yaklasanOdemeler = await _db.getYaklasanOdemeler();
-      _musteriler = await _db.getMusteriler();
-      _satislar = await _db.getSatislar();
-      _cariOzet = await _db.getCariOzet();
-      _kasalar = await _db.getSettingValues('kasa');
-      _kategoriRapor = await _db.getKategoriBazliRapor();
-      _aylikRapor = await _db.getAylikHarcamaRaporu(DateTime.now().year);
-      _kasaBazliRapor = await _db.getKasaBazliRapor();
-      
-      // Bildirimleri planla
-      await _scheduleNotifications();
-    } catch (e) {
-      _error = 'Veriler yüklenirken hata: $e';
+    final List<String> errors = [];
+
+    try { _kasaHareketleri = await _db.getKasaHareketleri(); } catch (e) { errors.add('Kasa: $e'); }
+    try { _kasaOzet = await _db.getKasaOzet(); } catch (e) { errors.add('Kasa özet: $e'); }
+    try { _kasaBakiyeleri = await _db.getKasaBakiyeleri(); } catch (e) { errors.add('Bakiye: $e'); }
+    try { _gundelikciler = await _db.getGundelikciler(); } catch (e) { errors.add('Gündelikçi: $e'); }
+    try { _gundelikciOzet = await _db.getGundelikciOzet(); } catch (e) { errors.add('G.özet: $e'); }
+    try { _krediler = await _db.getKrediler(); } catch (e) { errors.add('Kredi: $e'); }
+    try { _krediOzet = await _db.getKrediOzet(); } catch (e) { errors.add('K.özet: $e'); }
+    try { _ortaklar = await _db.getOrtaklar(); } catch (e) { errors.add('Ortak: $e'); }
+    try { _ortakOzet = await _db.getOrtakOzet(); } catch (e) { errors.add('O.özet: $e'); }
+    try { _yaklasanOdemeler = await _db.getYaklasanOdemeler(); } catch (e) { errors.add('Ödeme: $e'); }
+    try { _musteriler = await _db.getMusteriler(); } catch (e) { errors.add('Müşteri: $e'); }
+    try { _satislar = await _db.getSatislar(); } catch (e) { errors.add('Satış: $e'); }
+    try { _cariOzet = await _db.getCariOzet(); } catch (e) { errors.add('Cari: $e'); }
+    try { _kasalar = await _db.getSettingValues('kasa'); } catch (e) { errors.add('Ayar: $e'); }
+    try { _kategoriRapor = await _db.getKategoriBazliRapor(); } catch (e) { errors.add('Rapor: $e'); }
+    try { _aylikRapor = await _db.getAylikHarcamaRaporu(DateTime.now().year); } catch (e) { errors.add('Aylık: $e'); }
+    try { _kasaBazliRapor = await _db.getKasaBazliRapor(); } catch (e) { errors.add('KasaR: $e'); }
+
+    // Bildirimleri planla
+    try { await _scheduleNotifications(); } catch (e) { errors.add('Bildirim: $e'); }
+
+    if (errors.isNotEmpty) {
+      _error = 'Bazı veriler yüklenemedi: ${errors.join(', ')}';
     }
 
     _isLoading = false;

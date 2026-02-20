@@ -22,8 +22,9 @@ Future<GpsKonum> getCurrentPosition() async {
   }
 
   void onError(JSObject error) {
-    final code = (error as _JSPositionError).code;
-    final msg = (error as _JSPositionError).message;
+    final posError = error as _JSPositionError;
+    final code = posError.code;
+    final msg = posError.message;
     completer.completeError('GPS alınamadı: $msg (kod: $code)');
   }
 
@@ -64,9 +65,10 @@ external JSObject _createJSObject();
 
 JSObject _createPositionOptions() {
   final obj = _createJSObject();
-  (obj as _PositionOpts).enableHighAccuracy = true;
-  (obj as _PositionOpts).timeout = 15000;
-  (obj as _PositionOpts).maximumAge = 0;
+  final opts = obj as _PositionOpts;
+  opts.enableHighAccuracy = true;
+  opts.timeout = 15000;
+  opts.maximumAge = 0;
   return obj;
 }
 

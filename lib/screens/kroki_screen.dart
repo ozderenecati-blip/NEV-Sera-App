@@ -1487,10 +1487,6 @@ class _KrokiScreenState extends State<KrokiScreen> {
     final enteredCount = _bahceMetreler.where((m) => m > 0).length;
     if (enteredCount == 0) return;
 
-    // Merkez hesapla
-    final center = _bahcePoints.reduce((a, b) => a + b) /
-        _bahcePoints.length.toDouble();
-
     // Her kenarın mevcut piksel uzunluğunu ve hedef metre uzunluğunu karşılaştır
     // İlk girilen metre değerinden pxPerMetre hesapla
     double pxPerMetre = 0;
@@ -1520,23 +1516,7 @@ class _KrokiScreenState extends State<KrokiScreen> {
     }
     if (totalM <= 0 || totalPx <= 0) return;
 
-    final currentPxPerM = totalPx / totalM;
-    // Hedef: tüm kenarların toplamı (metre olarak girilenlerin toplamını) tüm piksel toplamına oranla
-    // Her girilmemiş kenarı mevcut piksel oranıyla tahmin et
-    double hedefToplam = 0;
-    for (int i = 0; i < _bahcePoints.length; i++) {
-      final j = (i + 1) % _bahcePoints.length;
-      final pxDist = (_bahcePoints[j] - _bahcePoints[i]).distance;
-      if (i < _bahceMetreler.length && _bahceMetreler[i] > 0) {
-        hedefToplam += _bahceMetreler[i];
-      } else {
-        hedefToplam += pxDist / currentPxPerM;
-      }
-    }
-    // Yeni ölçek
-    final newPxPerM = totalPx / hedefToplam;
-    // Scale farkı? Değişen yok, pxPerMetre zaten dinamik hesaplanıyor.
-    // Aslında metre değeri piksel oranını ETKİLİYOR, köşeler değişmez.
+    // Metre değerleri pxPerMetre hesabını etkiler, köşeler değişmez.
     // setState ile painter tekrar çizilir ve doğru metre etiketi gösterilir.
     setState(() {});
   }
@@ -2025,7 +2005,6 @@ class _ParselData {
     this.siraAraligi = 1.0,
     this.saksiAraligi = 0.4,
     this.siraAcisi,
-    this.seciliKenarIdx,
     List<Sira>? siralar,
   }) : siralar = siralar ?? [];
 

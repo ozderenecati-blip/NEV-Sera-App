@@ -1184,6 +1184,31 @@ class DatabaseService {
     }
   }
 
+  Future<int> updateCariAnlasma(CariAnlasma a) async {
+    try {
+      final docId = _getDocId('cari_anlasmalar', a.id!);
+      if (docId == null) return 0;
+      await _db.collection('cari_anlasmalar').doc(docId).update(a.toFirestoreMap());
+      return 1;
+    } catch (e) {
+      print('updateCariAnlasma error: $e');
+      return 0;
+    }
+  }
+
+  Future<int> deleteCariAnlasma(int id) async {
+    try {
+      final docId = _getDocId('cari_anlasmalar', id);
+      if (docId == null) return 0;
+      await _db.collection('cari_anlasmalar').doc(docId).update({'aktif': false});
+      _idMaps['cari_anlasmalar']!.remove(id);
+      return 1;
+    } catch (e) {
+      print('deleteCariAnlasma error: $e');
+      return 0;
+    }
+  }
+
   Future<List<CariAnlasma>> getCariAnlasmalari({int? cariId}) async {
     try {
       final snapshot = await _db.collection('cari_anlasmalar').get();

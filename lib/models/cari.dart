@@ -142,6 +142,20 @@ class CariAnlasma {
     };
   }
 
+  /// Firestore için id hariç, aktif boolean olarak
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'cari_id': cariId,
+      'baslik': baslik,
+      'tutar': tutar,
+      'tip': tip,
+      'para_birimi': paraBirimi,
+      'tarih': tarih.toIso8601String(),
+      'notlar': notlar,
+      'aktif': aktif,
+    };
+  }
+
   factory CariAnlasma.fromMap(Map<String, dynamic> map) {
     return CariAnlasma(
       id: map['id'],
@@ -155,6 +169,30 @@ class CariAnlasma {
           : DateTime.now(),
       notlar: map['notlar'],
       aktif: map['aktif'] == 1 || map['aktif'] == true,
+    );
+  }
+
+  CariAnlasma copyWith({
+    int? id,
+    int? cariId,
+    String? baslik,
+    double? tutar,
+    String? tip,
+    String? paraBirimi,
+    DateTime? tarih,
+    String? notlar,
+    bool? aktif,
+  }) {
+    return CariAnlasma(
+      id: id ?? this.id,
+      cariId: cariId ?? this.cariId,
+      baslik: baslik ?? this.baslik,
+      tutar: tutar ?? this.tutar,
+      tip: tip ?? this.tip,
+      paraBirimi: paraBirimi ?? this.paraBirimi,
+      tarih: tarih ?? this.tarih,
+      notlar: notlar ?? this.notlar,
+      aktif: aktif ?? this.aktif,
     );
   }
 }

@@ -1122,6 +1122,8 @@ class DatabaseService {
   Future<int> updateCari(Cari c) async => 0;
   Future<int> deleteCari(int id) async => 0;
   Future<int> insertCariAnlasma(CariAnlasma a) async => -1;
+  Future<int> updateCariAnlasma(CariAnlasma a) async => 0;
+  Future<int> deleteCariAnlasma(int id) async => 0;
   Future<List<CariAnlasma>> getCariAnlasmalari({int? cariId}) async => [];
 
   Future<void> close() async {

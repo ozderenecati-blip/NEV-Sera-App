@@ -191,7 +191,29 @@ class _CariScreenState extends State<CariScreen> {
                       leading: Icon(a.tip == 'borc' ? Icons.arrow_upward : Icons.arrow_downward, color: color, size: 20),
                       title: Text(a.baslik, style: const TextStyle(fontSize: 13)),
                       subtitle: Text('${DateFormat('dd.MM.yyyy').format(a.tarih)} • ${a.paraBirimi}', style: const TextStyle(fontSize: 12)),
-                      trailing: Text(fmt.format(a.tutar), style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(fmt.format(a.tutar), style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            iconSize: 18,
+                            icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[400]),
+                            onSelected: (val) {
+                              if (val == 'edit') {
+                                _showEditAnlasmaDialog(context, cari, a);
+                              } else if (val == 'delete') {
+                                _confirmDeleteAnlasma(context, cari, a, provider);
+                              }
+                            },
+                            itemBuilder: (_) => [
+                              const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit, size: 18), title: Text('Düzenle'), dense: true, contentPadding: EdgeInsets.zero)),
+                              PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete, size: 18, color: Colors.red[400]), title: Text('Sil', style: TextStyle(color: Colors.red[400])), dense: true, contentPadding: EdgeInsets.zero)),
+                            ],
+                          ),
+                        ],
+                      ),
                     );
                   }),
 
@@ -474,6 +496,149 @@ class _CariScreenState extends State<CariScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditAnlasmaDialog(BuildContext context, Cari cari, CariAnlasma anlasma) {
+    final baslikController = TextEditingController(text: anlasma.baslik);
+    final tutarController = TextEditingController(text: anlasma.tutar.toStringAsFixed(2));
+    final notlarController = TextEditingController(text: anlasma.notlar ?? '');
+    String tip = anlasma.tip;
+    String paraBirimi = anlasma.paraBirimi;
+    DateTime tarih = anlasma.tarih;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Anlaşma Düzenle'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('Borç'),
+                        selected: tip == 'borc',
+                        selectedColor: Colors.red[100],
+                        onSelected: (_) => setState(() => tip = 'borc'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('Alacak'),
+                        selected: tip == 'alacak',
+                        selectedColor: Colors.green[100],
+                        onSelected: (_) => setState(() => tip = 'alacak'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: baslikController,
+                  decoration: const InputDecoration(labelText: 'Anlaşma Başlığı *', prefixIcon: Icon(Icons.description)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: DropdownButtonFormField<String>(
+                        value: paraBirimi,
+                        decoration: const InputDecoration(labelText: 'Birim'),
+                        items: const [
+                          DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
+                          DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                          DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
+                        ],
+                        onChanged: (v) => setState(() => paraBirimi = v!),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: tutarController,
+                        decoration: const InputDecoration(labelText: 'Tutar *'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today),
+                  title: Text(DateFormat('dd.MM.yyyy').format(tarih)),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: tarih,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                    );
+                    if (picked != null) setState(() => tarih = picked);
+                  },
+                ),
+                TextField(
+                  controller: notlarController,
+                  decoration: const InputDecoration(labelText: 'Notlar', prefixIcon: Icon(Icons.note)),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+            FilledButton(
+              onPressed: () async {
+                final tutar = double.tryParse(tutarController.text.replaceAll(',', '.'));
+                if (baslikController.text.trim().isEmpty || tutar == null || tutar <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Başlık ve geçerli tutar girin'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+                final provider = Provider.of<AppProvider>(context, listen: false);
+                final updated = anlasma.copyWith(
+                  baslik: baslikController.text.trim(),
+                  tutar: tutar,
+                  tip: tip,
+                  paraBirimi: paraBirimi,
+                  tarih: tarih,
+                  notlar: notlarController.text.trim().isEmpty ? null : notlarController.text.trim(),
+                );
+                await provider.updateCariAnlasma(updated);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('Güncelle'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteAnlasma(BuildContext context, Cari cari, CariAnlasma anlasma, AppProvider provider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Anlaşma Sil'),
+        content: Text('"${anlasma.baslik}" anlaşması silinsin mi?\n\nTutar: ${anlasma.tutar.toStringAsFixed(2)} ${anlasma.paraBirimi}'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await provider.deleteCariAnlasma(anlasma.id!);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text('Sil'),
+          ),
+        ],
       ),
     );
   }

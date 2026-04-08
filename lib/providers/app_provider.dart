@@ -714,6 +714,30 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateCariAnlasma(CariAnlasma anlasma) async {
+    try {
+      await _db.updateCariAnlasma(anlasma);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCariAnlasma(int id) async {
+    try {
+      await _db.deleteCariAnlasma(id);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Belirli bir kasa setting'ini bul (para birimi bilgisi için)
   AppSettings? getKasaSetting(String kasaAdi) {
     return _kasaSettings.where((k) => k.deger == kasaAdi).firstOrNull;

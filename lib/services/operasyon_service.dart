@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../models/bahce.dart';
 import '../models/gorev.dart';
 import '../models/daily_work_report.dart';
+import '../models/gubre.dart';
 
 /// Operasyon modülü Firestore CRUD servisi
 class OperasyonService {
@@ -258,6 +259,159 @@ class OperasyonService {
     } catch (e) {
       debugPrint('deleteDailyReport error: $e');
       return false;
+    }
+  }
+
+  // ==================== GÜBRE TANKLARI ====================
+
+  CollectionReference get _tanklarRef => _db.collection('gubre_tanklari');
+
+  Future<List<GubreTank>> getTanklar({String? bahceId}) async {
+    try {
+      Query query = _tanklarRef;
+      if (bahceId != null) {
+        query = query.where('bahce_id', isEqualTo: bahceId);
+      }
+      final snapshot = await query.orderBy('ad').get();
+      return snapshot.docs.map((doc) {
+        return GubreTank.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      }).toList();
+    } catch (e) {
+      debugPrint('getTanklar error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addTank(GubreTank tank) async {
+    try {
+      final doc = await _tanklarRef.add(tank.toMap());
+      return doc.id;
+    } catch (e) {
+      debugPrint('addTank error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateTank(GubreTank tank) async {
+    if (tank.id == null) return false;
+    try {
+      await _tanklarRef.doc(tank.id).update(tank.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('updateTank error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteTank(String id) async {
+    try {
+      await _tanklarRef.doc(id).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteTank error: $e');
+      return false;
+    }
+  }
+
+  // ==================== GÜBRE ENVANTERİ ====================
+
+  CollectionReference get _envanterRef => _db.collection('gubre_envanter');
+
+  Future<List<GubreEnvanter>> getEnvanter({String? bahceId}) async {
+    try {
+      Query query = _envanterRef;
+      if (bahceId != null) {
+        query = query.where('bahce_id', isEqualTo: bahceId);
+      }
+      final snapshot = await query.orderBy('gubre_adi').get();
+      return snapshot.docs.map((doc) {
+        return GubreEnvanter.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      }).toList();
+    } catch (e) {
+      debugPrint('getEnvanter error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addEnvanter(GubreEnvanter envanter) async {
+    try {
+      final doc = await _envanterRef.add(envanter.toMap());
+      return doc.id;
+    } catch (e) {
+      debugPrint('addEnvanter error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateEnvanter(GubreEnvanter envanter) async {
+    if (envanter.id == null) return false;
+    try {
+      await _envanterRef.doc(envanter.id).update(envanter.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('updateEnvanter error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteEnvanter(String id) async {
+    try {
+      await _envanterRef.doc(id).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteEnvanter error: $e');
+      return false;
+    }
+  }
+
+  /// Envanterden miktar düş (katlama sonrası)
+  Future<bool> envanterdenDus(String envanterId, double dusulecekMiktar) async {
+    try {
+      final doc = await _envanterRef.doc(envanterId).get();
+      if (!doc.exists) return false;
+      final envanter = GubreEnvanter.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      final yeniMiktar = (envanter.miktar - dusulecekMiktar).clamp(0.0, double.infinity);
+      await _envanterRef.doc(envanterId).update({
+        'miktar': yeniMiktar,
+        'son_guncelleme': DateTime.now().toIso8601String(),
+      });
+      return true;
+    } catch (e) {
+      debugPrint('envanterdenDus error: $e');
+      return false;
+    }
+  }
+
+  // ==================== KATLAMA KAYITLARI ====================
+
+  CollectionReference get _katlamaRef => _db.collection('katlama_kayitlari');
+
+  Future<List<KatlamaKaydi>> getKatlamaKayitlari({String? bahceId, String? tankId}) async {
+    try {
+      Query query = _katlamaRef;
+      if (bahceId != null) {
+        query = query.where('bahce_id', isEqualTo: bahceId);
+      }
+      if (tankId != null) {
+        query = query.where('tank_id', isEqualTo: tankId);
+      }
+      final snapshot = await query.orderBy('tarih', descending: true).get();
+      return snapshot.docs.map((doc) {
+        return KatlamaKaydi.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      }).toList();
+    } catch (e) {
+      debugPrint('getKatlamaKayitlari error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addKatlamaKaydi(KatlamaKaydi kaydi) async {
+    try {
+      final doc = await _katlamaRef.add(kaydi.toMap());
+      return doc.id;
+    } catch (e) {
+      debugPrint('addKatlamaKaydi error: $e');
+      return null;
     }
   }
 }

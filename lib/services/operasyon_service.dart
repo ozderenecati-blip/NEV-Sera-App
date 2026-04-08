@@ -272,10 +272,12 @@ class OperasyonService {
       if (bahceId != null) {
         query = query.where('bahce_id', isEqualTo: bahceId);
       }
-      final snapshot = await query.orderBy('ad').get();
-      return snapshot.docs.map((doc) {
+      final snapshot = await query.get();
+      final list = snapshot.docs.map((doc) {
         return GubreTank.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
       }).toList();
+      list.sort((a, b) => a.ad.compareTo(b.ad));
+      return list;
     } catch (e) {
       debugPrint('getTanklar error: $e');
       return [];
@@ -323,10 +325,12 @@ class OperasyonService {
       if (bahceId != null) {
         query = query.where('bahce_id', isEqualTo: bahceId);
       }
-      final snapshot = await query.orderBy('gubre_adi').get();
-      return snapshot.docs.map((doc) {
+      final snapshot = await query.get();
+      final list = snapshot.docs.map((doc) {
         return GubreEnvanter.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
       }).toList();
+      list.sort((a, b) => a.gubreAdi.compareTo(b.gubreAdi));
+      return list;
     } catch (e) {
       debugPrint('getEnvanter error: $e');
       return [];
@@ -395,10 +399,12 @@ class OperasyonService {
       if (tankId != null) {
         query = query.where('tank_id', isEqualTo: tankId);
       }
-      final snapshot = await query.orderBy('tarih', descending: true).get();
-      return snapshot.docs.map((doc) {
+      final snapshot = await query.get();
+      final list = snapshot.docs.map((doc) {
         return KatlamaKaydi.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
       }).toList();
+      list.sort((a, b) => b.tarih.compareTo(a.tarih));
+      return list;
     } catch (e) {
       debugPrint('getKatlamaKayitlari error: $e');
       return [];
@@ -411,6 +417,41 @@ class OperasyonService {
       return doc.id;
     } catch (e) {
       debugPrint('addKatlamaKaydi error: $e');
+      return null;
+    }
+  }
+
+  // ==================== REÇETE GEÇMİŞİ ====================
+
+  CollectionReference get _receteGecmisiRef => _db.collection('recete_gecmisi');
+
+  Future<List<ReceteGecmisi>> getReceteGecmisi({String? bahceId, String? tankId}) async {
+    try {
+      Query query = _receteGecmisiRef;
+      if (bahceId != null) {
+        query = query.where('bahce_id', isEqualTo: bahceId);
+      }
+      if (tankId != null) {
+        query = query.where('tank_id', isEqualTo: tankId);
+      }
+      final snapshot = await query.get();
+      final list = snapshot.docs.map((doc) {
+        return ReceteGecmisi.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      }).toList();
+      list.sort((a, b) => b.tarih.compareTo(a.tarih));
+      return list;
+    } catch (e) {
+      debugPrint('getReceteGecmisi error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addReceteGecmisi(ReceteGecmisi gecmis) async {
+    try {
+      final doc = await _receteGecmisiRef.add(gecmis.toMap());
+      return doc.id;
+    } catch (e) {
+      debugPrint('addReceteGecmisi error: $e');
       return null;
     }
   }

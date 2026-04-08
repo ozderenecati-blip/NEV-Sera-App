@@ -238,3 +238,61 @@ class KatlamaKaydi {
             : DateTime.now(),
       );
 }
+
+/// Reçete geçmişi — her reçete değişikliğinde kaydedilir
+class ReceteGecmisi {
+  final String? id;
+  final String bahceId;
+  final String bahceAdi;
+  final String tankId;
+  final String tankAdi;
+  final List<ReceteKalemi> recete; // o andaki reçete snapshot'ı
+  final String degistirenKullaniciId;
+  final String degistirenKullaniciAdi;
+  final String not; // opsiyonel açıklama
+  final DateTime tarih;
+
+  ReceteGecmisi({
+    this.id,
+    required this.bahceId,
+    required this.bahceAdi,
+    required this.tankId,
+    required this.tankAdi,
+    required this.recete,
+    required this.degistirenKullaniciId,
+    required this.degistirenKullaniciAdi,
+    this.not = '',
+    DateTime? tarih,
+  }) : tarih = tarih ?? DateTime.now();
+
+  Map<String, dynamic> toMap() => {
+        'bahce_id': bahceId,
+        'bahce_adi': bahceAdi,
+        'tank_id': tankId,
+        'tank_adi': tankAdi,
+        'recete': recete.map((r) => r.toMap()).toList(),
+        'degistiren_kullanici_id': degistirenKullaniciId,
+        'degistiren_kullanici_adi': degistirenKullaniciAdi,
+        'not': not,
+        'tarih': tarih.toIso8601String(),
+      };
+
+  factory ReceteGecmisi.fromMap(Map<String, dynamic> map, {String? docId}) =>
+      ReceteGecmisi(
+        id: docId ?? map['id']?.toString(),
+        bahceId: map['bahce_id'] ?? '',
+        bahceAdi: map['bahce_adi'] ?? '',
+        tankId: map['tank_id'] ?? '',
+        tankAdi: map['tank_adi'] ?? '',
+        recete: (map['recete'] as List<dynamic>?)
+                ?.map((r) => ReceteKalemi.fromMap(r as Map<String, dynamic>))
+                .toList() ??
+            [],
+        degistirenKullaniciId: map['degistiren_kullanici_id'] ?? '',
+        degistirenKullaniciAdi: map['degistiren_kullanici_adi'] ?? '',
+        not: map['not'] ?? '',
+        tarih: map['tarih'] != null
+            ? DateTime.tryParse(map['tarih']) ?? DateTime.now()
+            : DateTime.now(),
+      );
+}

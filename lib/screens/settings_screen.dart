@@ -57,77 +57,68 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Widget _buildKasalarTab() {
     return Consumer<AppProvider>(
       builder: (context, provider, child) {
-        return FutureBuilder<List<AppSettings>>(
-          future: provider.getSettingsList('kasa'),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            
-            final items = snapshot.data!;
-            
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Text('${items.length} Kasa', style: TextStyle(color: Colors.grey.shade600)),
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Yeni Kasa'),
-                        onPressed: () => _showAddKasaDialog(),
-                      ),
-                    ],
+        final items = provider.kasaSettings;
+        
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text('${items.length} Kasa', style: TextStyle(color: Colors.grey.shade600)),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Yeni Kasa'),
+                    onPressed: () => _showAddKasaDialog(),
                   ),
-                ),
-                
-                Expanded(
-                  child: items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                ],
+              ),
+            ),
+            
+            Expanded(
+              child: items.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text('Henüz Kasa eklenmedi', style: TextStyle(color: Colors.grey.shade600)),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          child: Icon(Icons.account_balance_wallet, color: Theme.of(context).colorScheme.primary),
+                        ),
+                        title: Text(item.kasaGosterimAdi),
+                        subtitle: item.ortakId != null 
+                            ? _buildOrtakSubtitle(provider, item.ortakId!)
+                            : const Text('Şahıs atanmadı', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
-                            const SizedBox(height: 16),
-                            Text('Henüz Kasa eklenmedi', style: TextStyle(color: Colors.grey.shade600)),
+                            IconButton(
+                              icon: const Icon(Icons.edit),
+                              onPressed: () => _showEditKasaDialog(item),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _showDeleteConfirmation(item, provider),
+                            ),
                           ],
                         ),
-                      )
-                    : ListView.builder(
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                              child: Icon(Icons.account_balance_wallet, color: Theme.of(context).colorScheme.primary),
-                            ),
-                            title: Text(item.deger),
-                            subtitle: item.ortakId != null 
-                                ? _buildOrtakSubtitle(provider, item.ortakId!)
-                                : const Text('Şahıs atanmadı', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  onPressed: () => _showEditKasaDialog(item),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _showDeleteConfirmation(item, provider),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                ),
-              ],
-            );
-          },
+                      );
+                    },
+                  ),
+            ),
+          ],
         );
       },
     );

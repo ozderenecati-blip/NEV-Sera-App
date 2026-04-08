@@ -634,7 +634,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: paraBirimi,
+                    value: paraBirimi,
                     decoration: const InputDecoration(
                       labelText: 'Para Birimi',
                       prefixIcon: Icon(Icons.currency_exchange),
@@ -768,7 +768,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: paraBirimi,
+                    value: paraBirimi,
                     decoration: const InputDecoration(
                       labelText: 'Para Birimi',
                       prefixIcon: Icon(Icons.currency_exchange),
@@ -780,7 +780,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: secilenKasa,
+                    value: secilenKasa,
                     decoration: const InputDecoration(
                       labelText: 'Çıkış Kasası *',
                       prefixIcon: Icon(Icons.account_balance_wallet),
@@ -921,7 +921,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: paraBirimi,
+                    value: paraBirimi,
                     decoration: const InputDecoration(
                       labelText: 'Para Birimi',
                       prefixIcon: Icon(Icons.currency_exchange),
@@ -933,7 +933,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    initialValue: secilenKasa,
+                    value: secilenKasa,
                     decoration: const InputDecoration(
                       labelText: 'Çıkış Kasası *',
                       prefixIcon: Icon(Icons.account_balance_wallet),

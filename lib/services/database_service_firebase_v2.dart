@@ -29,6 +29,8 @@ class DatabaseService {
     'satislar': {},
     'tahsilatlar': {},
     'settings': {},
+    'cariler': {},
+    'cari_anlasmalar': {},
   };
   
   int _autoId = 1;

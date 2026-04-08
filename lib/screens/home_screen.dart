@@ -47,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
       const KrediScreen(),
       const KasaScreen(),
       const GiderPusulasiScreen(),
-      const OrtaklarScreen(),
       const CariScreen(),
     ];
 
@@ -133,11 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: 'G. Pusulası',
               ),
               NavigationDestination(
-                icon: const Icon(Icons.people_outlined, size: 24),
-                selectedIcon: Icon(Icons.people, size: 24, color: ThemeProvider.primaryColor),
-                label: 'Ortaklar',
-              ),
-              NavigationDestination(
                 icon: const Icon(Icons.business_center_outlined, size: 24),
                 selectedIcon: Icon(Icons.business_center, size: 24, color: ThemeProvider.primaryColor),
                 label: 'Cariler',
@@ -188,6 +182,17 @@ class DashboardTab extends StatelessWidget {
               context.read<AppProvider>().loadAllData();
             },
             tooltip: 'Yenile',
+          ),
+          IconButton(
+            icon: const Icon(Icons.people),
+            onPressed: () {
+              HapticHelper.lightTap();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OrtaklarScreen()),
+              );
+            },
+            tooltip: 'Ortaklar',
           ),
           IconButton(
             icon: const Icon(Icons.storefront),

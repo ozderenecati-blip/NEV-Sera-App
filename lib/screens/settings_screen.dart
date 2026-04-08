@@ -59,64 +59,80 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       builder: (context, provider, child) {
         final items = provider.kasaSettings;
         
-        return Column(
+        return Stack(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Text('${items.length} Kasa', style: TextStyle(color: Colors.grey.shade600)),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('Yeni Kasa'),
-                    onPressed: () => _showAddKasaDialog(),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Text('${items.length} Kasa', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            
-            Expanded(
-              child: items.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        Text('Henüz Kasa eklenmedi', style: TextStyle(color: Colors.grey.shade600)),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final item = items[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(Icons.account_balance_wallet, color: Theme.of(context).colorScheme.primary),
-                        ),
-                        title: Text(item.kasaGosterimAdi),
-                        subtitle: item.ortakId != null 
-                            ? _buildOrtakSubtitle(provider, item.ortakId!)
-                            : const Text('Şahıs atanmadı', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                ),
+                
+                Expanded(
+                  child: items.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit),
-                              onPressed: () => _showEditKasaDialog(item),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () => _showDeleteConfirmation(item, provider),
+                            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
+                            const SizedBox(height: 16),
+                            Text('Henüz Kasa eklenmedi', style: TextStyle(color: Colors.grey.shade600)),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: () => _showAddKasaDialog(),
+                              icon: const Icon(Icons.add),
+                              label: const Text('İlk Kasayı Ekle'),
                             ),
                           ],
                         ),
-                      );
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 80),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final item = items[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                              child: Icon(Icons.account_balance_wallet, color: Theme.of(context).colorScheme.primary),
+                            ),
+                            title: Text(item.kasaGosterimAdi),
+                            subtitle: item.ortakId != null 
+                                ? _buildOrtakSubtitle(provider, item.ortakId!)
+                                : const Text('Şahıs atanmadı', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () => _showEditKasaDialog(item),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete, color: Colors.red),
+                                  onPressed: () => _showDeleteConfirmation(item, provider),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                ),
+              ],
+            ),
+            // FAB - Yeni Kasa Ekle
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton.extended(
+                heroTag: 'addKasa',
+                onPressed: () => _showAddKasaDialog(),
+                icon: const Icon(Icons.add),
+                label: const Text('Yeni Kasa'),
+              ),
             ),
           ],
         );

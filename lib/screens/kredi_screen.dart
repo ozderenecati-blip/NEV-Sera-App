@@ -42,21 +42,12 @@ class KrediScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      currencyFormat.format(provider.krediOzet['toplam_bakiye'] ?? 0),
+                      currencyFormat.format(provider.krediler.fold<double>(0, (sum, k) => sum + k.cekilenTutar) - provider.krediler.fold<double>(0, (sum, k) => sum + k.taksitler.where((t) => t.odendi).fold<double>(0, (s, t) => s + t.toplamTaksit))),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildMiniInfo('Aktif Kredi', '${(provider.krediOzet['aktif_kredi'] ?? 0).toInt()}', Icons.credit_card),
-                        Container(height: 40, width: 1, color: Colors.white24),
-                        _buildMiniInfo('Aylık Taksit', currencyFormat.format(provider.krediOzet['aylik_taksit'] ?? 0), Icons.calendar_month),
-                      ],
                     ),
                   ],
                 ),
@@ -398,6 +389,12 @@ class KrediScreen extends StatelessWidget {
                                         if (picked != null && context.mounted) {
                                           final provider = Provider.of<AppProvider>(context, listen: false);
                                           await provider.updateTaksitTarih(kredi.id!, taksit.id!, picked);
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(content: Text('Taksit tarihi güncellendi'), backgroundColor: Colors.blue),
+                                            );
+                                          }
                                         }
                                       },
                                       child: Icon(Icons.edit_calendar, size: 18, color: Colors.blue.shade400),

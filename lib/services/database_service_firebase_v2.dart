@@ -480,14 +480,28 @@ class DatabaseService {
         }
       }
       
+      // Aylık taksit hesapla (bu ay vadeli ödenmemiş taksitler)
+      double aylikTaksit = 0;
+      final now = DateTime.now();
+      for (var k in krediler) {
+        for (var t in k.taksitler) {
+          if (!t.odendi && t.vadeTarihi.month == now.month && t.vadeTarihi.year == now.year) {
+            aylikTaksit += t.toplamTaksit;
+          }
+        }
+      }
+      
       return {
+        'toplam_bakiye': toplamBorc - odenenTutar,
+        'aktif_kredi': krediler.length.toDouble(),
+        'aylik_taksit': aylikTaksit,
         'toplamBorc': toplamBorc,
         'odenenTutar': odenenTutar,
         'kalanBorc': toplamBorc - odenenTutar,
         'krediSayisi': krediler.length.toDouble(),
       };
     } catch (e) {
-      return {'toplamBorc': 0, 'odenenTutar': 0, 'kalanBorc': 0, 'krediSayisi': 0};
+      return {'toplam_bakiye': 0, 'aktif_kredi': 0, 'aylik_taksit': 0, 'toplamBorc': 0, 'odenenTutar': 0, 'kalanBorc': 0, 'krediSayisi': 0};
     }
   }
 

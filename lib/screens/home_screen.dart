@@ -1355,9 +1355,18 @@ class DashboardTab extends StatelessWidget {
     AppProvider provider,
     NumberFormat fmt,
   ) {
-    final ozet = provider.krediOzet;
-    final aktifKredi = (ozet['aktif_kredi'] ?? 0).toInt();
-    final toplamBakiye = ozet['toplam_bakiye'] ?? 0.0;
+    // Kredilerden direkt hesapla
+    final krediler = provider.krediler;
+    final aktifKredi = krediler.length;
+    double toplamBorc = 0;
+    double odenenTutar = 0;
+    for (var k in krediler) {
+      toplamBorc += k.cekilenTutar;
+      for (var t in k.taksitler) {
+        if (t.odendi) odenenTutar += t.toplamTaksit;
+      }
+    }
+    final toplamBakiye = toplamBorc - odenenTutar;
 
     return Card(
       child: Padding(
@@ -1412,7 +1421,7 @@ class DashboardTab extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         fmt.format(toplamBakiye),
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(fontWeight: FontWeight.bold, color: toplamBakiye > 0 ? Colors.red : Colors.green),
                       ),
                     ],
                   ),

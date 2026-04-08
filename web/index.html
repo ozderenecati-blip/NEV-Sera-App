@@ -51,6 +51,18 @@
       var splash = document.getElementById('splash');
       if (splash) splash.style.display = 'none';
     });
+
+    // Force clear old service worker caches on load
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var registration of registrations) {
+          registration.unregister();
+        }
+      });
+      caches.keys().then(function(names) {
+        for (var name of names) caches.delete(name);
+      });
+    }
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

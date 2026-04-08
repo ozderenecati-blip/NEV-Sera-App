@@ -14,6 +14,7 @@ class AppUser {
   final bool aktif;
   final DateTime? sonGiris;
   final DateTime olusturmaTarihi;
+  final List<Map<String, String>> atanmisBahceler; // [{id: 'xxx', ad: 'Beydağ-BB'}]
 
   AppUser({
     this.id,
@@ -23,6 +24,7 @@ class AppUser {
     required this.rol,
     this.aktif = true,
     this.sonGiris,
+    this.atanmisBahceler = const [],
     DateTime? olusturmaTarihi,
   }) : olusturmaTarihi = olusturmaTarihi ?? DateTime.now();
 
@@ -71,6 +73,7 @@ class AppUser {
       'aktif': aktif,
       'son_giris': sonGiris?.toIso8601String(),
       'olusturma_tarihi': olusturmaTarihi.toIso8601String(),
+      'atanmis_bahceler': atanmisBahceler.map((b) => {'id': b['id'], 'ad': b['ad']}).toList(),
     };
   }
 
@@ -86,6 +89,9 @@ class AppUser {
       ),
       aktif: map['aktif'] ?? true,
       sonGiris: map['son_giris'] != null ? DateTime.tryParse(map['son_giris']) : null,
+      atanmisBahceler: (map['atanmis_bahceler'] as List<dynamic>?)
+          ?.map((b) => {'id': (b['id'] ?? '').toString(), 'ad': (b['ad'] ?? '').toString()})
+          .toList() ?? [],
       olusturmaTarihi: map['olusturma_tarihi'] != null 
           ? DateTime.tryParse(map['olusturma_tarihi']) ?? DateTime.now()
           : DateTime.now(),
@@ -100,6 +106,7 @@ class AppUser {
     UserRole? rol,
     bool? aktif,
     DateTime? sonGiris,
+    List<Map<String, String>>? atanmisBahceler,
   }) {
     return AppUser(
       id: id ?? this.id,
@@ -109,6 +116,7 @@ class AppUser {
       rol: rol ?? this.rol,
       aktif: aktif ?? this.aktif,
       sonGiris: sonGiris ?? this.sonGiris,
+      atanmisBahceler: atanmisBahceler ?? this.atanmisBahceler,
       olusturmaTarihi: olusturmaTarihi,
     );
   }

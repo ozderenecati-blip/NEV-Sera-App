@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../models/app_user.dart';
+import '../models/bahce.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/operasyon_service.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -14,19 +16,22 @@ class UserManagementScreen extends StatefulWidget {
 
 class _UserManagementScreenState extends State<UserManagementScreen> {
   List<AppUser> _users = [];
+  List<Bahce> _bahceler = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    _loadData();
   }
 
-  Future<void> _loadUsers() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final users = await context.read<AuthProvider>().getUsers();
+    final bahceler = await OperasyonService().getBahceler();
     setState(() {
       _users = users;
+      _bahceler = bahceler;
       _isLoading = false;
     });
   }
@@ -59,7 +64,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   ),
                 )
               : RefreshIndicator(
-                  onRefresh: _loadUsers,
+                  onRefresh: _loadData,
                   child: ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: _users.length,
@@ -136,6 +141,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
             ),
+            if (user.atanmisBahceler.isNotEmpty) ...[              const SizedBox(height: 6),
+              Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: user.atanmisBahceler.map((b) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD97706).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('🌿 ${b['ad']}', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706))),
+                )).toList(),
+              ),
+            ],
           ],
         ),
         trailing: PopupMenuButton<String>(
@@ -191,6 +210,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     final usernameController = TextEditingController(text: user?.kullaniciAdi ?? '');
     final passwordController = TextEditingController(text: user?.sifre ?? '');
     UserRole selectedRole = user?.rol ?? UserRole.calisan;
+    List<Map<String, String>> seciliBahceler = user != null
+        ? List<Map<String, String>>.from(user.atanmisBahceler)
+        : [];
 
     showDialog(
       context: context,
@@ -251,6 +273,39 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     }
                   },
                 ),
+                // Bahçe ataması
+                const SizedBox(height: 16),
+                InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Atanmış Bahçeler',
+                    prefixIcon: const Icon(Icons.park, color: Color(0xFFD97706)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: _bahceler.isEmpty
+                      ? const Text('Henüz bahçe yok', style: TextStyle(color: Colors.grey))
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _bahceler.map((b) {
+                            final isSelected = seciliBahceler.any((sb) => sb['id'] == b.id);
+                            return FilterChip(
+                              selected: isSelected,
+                              label: Text(b.ad, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : null)),
+                              selectedColor: const Color(0xFFD97706),
+                              checkmarkColor: Colors.white,
+                              onSelected: (selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    seciliBahceler.add({'id': b.id ?? '', 'ad': b.ad});
+                                  } else {
+                                    seciliBahceler.removeWhere((sb) => sb['id'] == b.id);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                ),
               ],
             ),
           ),
@@ -282,6 +337,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     user.copyWith(
                       adSoyad: nameController.text.trim(),
                       rol: selectedRole,
+                      atanmisBahceler: seciliBahceler,
                     ),
                   );
                 } else {
@@ -291,13 +347,14 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       sifre: passwordController.text.trim(),
                       adSoyad: nameController.text.trim(),
                       rol: selectedRole,
+                      atanmisBahceler: seciliBahceler,
                     ),
                   );
                 }
 
                 if (success && ctx.mounted) {
                   Navigator.pop(ctx);
-                  _loadUsers();
+                  _loadData();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(isEdit ? 'Kullanıcı güncellendi' : 'Kullanıcı eklendi')),
                   );
@@ -354,7 +411,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Şifre değiştirildi')),
                 );
-                _loadUsers();
+                _loadData();
               }
             },
             style: ElevatedButton.styleFrom(
@@ -384,7 +441,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               final success = await context.read<AuthProvider>().deactivateUser(user.id!);
               if (success && ctx.mounted) {
                 Navigator.pop(ctx);
-                _loadUsers();
+                _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Kullanıcı deaktif edildi')),
                 );

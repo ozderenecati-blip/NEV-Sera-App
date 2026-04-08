@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/daily_work_report.dart';
+import '../models/bahce.dart';
 import '../providers/auth_provider.dart';
 import '../services/operasyon_service.dart';
 
@@ -16,20 +17,25 @@ class DailyWorkReportScreen extends StatefulWidget {
 class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
   final OperasyonService _service = OperasyonService();
   List<DailyWorkReport> _raporlar = [];
+  List<Bahce> _bahceler = [];
   bool _isLoading = true;
   final _dateFormat = DateFormat('dd.MM.yyyy', 'tr_TR');
+
+  String? _seciliBahceId; // null = Tümü
 
   @override
   void initState() {
     super.initState();
-    _loadRaporlar();
+    _loadData();
   }
 
-  Future<void> _loadRaporlar() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user == null) return;
+
+    _bahceler = await _service.getBahceler();
 
     if (auth.canVerifyDailyReport) {
       _raporlar = await _service.getDailyReports();
@@ -39,27 +45,70 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
     setState(() => _isLoading = false);
   }
 
+  List<DailyWorkReport> get _filtrelenmisRaporlar {
+    if (_seciliBahceId == null) return _raporlar;
+    return _raporlar.where((r) => r.bahceId == _seciliBahceId).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final raporlar = _filtrelenmisRaporlar;
+
     return Scaffold(
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _raporlar.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadRaporlar,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    itemCount: _raporlar.length,
-                    itemBuilder: (context, index) => _buildRaporCard(_raporlar[index], index),
-                  ),
-                ),
+      body: Column(
+        children: [
+          // Bahçe filtre çipleri
+          if (_bahceler.isNotEmpty)
+            SizedBox(
+              height: 50,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                children: [
+                  _buildFilterChip(null, 'Tümü (${_raporlar.length})'),
+                  ..._bahceler.map((b) {
+                    final count = _raporlar.where((r) => r.bahceId == b.id).length;
+                    return _buildFilterChip(b.id, '${b.ad} ($count)');
+                  }),
+                ],
+              ),
+            ),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : raporlar.isEmpty
+                    ? _buildEmptyState()
+                    : RefreshIndicator(
+                        onRefresh: _loadData,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                          itemCount: raporlar.length,
+                          itemBuilder: (context, index) => _buildRaporCard(raporlar[index], index),
+                        ),
+                      ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showYeniRaporDialog(),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Yeni Rapor'),
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String? bahceId, String label) {
+    final isSelected = _seciliBahceId == bahceId;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        selected: isSelected,
+        label: Text(label, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : null)),
+        selectedColor: const Color(0xFFD97706),
+        checkmarkColor: Colors.white,
+        onSelected: (_) => setState(() => _seciliBahceId = bahceId),
       ),
     );
   }
@@ -108,6 +157,8 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(_dateFormat.format(rapor.tarih), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       Text(rapor.kullaniciAdi, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                      if (rapor.bahceAdi != null)
+                        Text('🌿 ${rapor.bahceAdi}', style: TextStyle(color: const Color(0xFFD97706), fontSize: 12, fontWeight: FontWeight.w500)),
                     ]),
                   ),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -183,13 +234,20 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                     ]),
                   ),
               ]),
+              if (rapor.bahceAdi != null) ...[
+                const SizedBox(height: 4),
+                Row(children: [
+                  const Icon(Icons.park, size: 16, color: Color(0xFFD97706)),
+                  const SizedBox(width: 4),
+                  Text(rapor.bahceAdi!, style: const TextStyle(color: Color(0xFFD97706), fontWeight: FontWeight.w600, fontSize: 14)),
+                ]),
+              ],
               if (rapor.onaylandi && rapor.onaylayanAdi != null) ...[
                 const SizedBox(height: 4),
                 Text('Onaylayan: ${rapor.onaylayanAdi} • ${rapor.onayTarihi != null ? _dateFormat.format(rapor.onayTarihi!) : ""}',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
               ],
               const SizedBox(height: 20),
-              // İş kalemleri
               Text('Yapılan İşler (${rapor.isler.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               ...rapor.isler.asMap().entries.map((entry) {
@@ -236,7 +294,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                                 final guncelIsler = List<IsKalemi>.from(rapor.isler)..removeAt(idx);
                                 await _service.updateDailyReport(rapor.copyWith(isler: guncelIsler));
                                 if (ctx.mounted) Navigator.pop(ctx);
-                                _loadRaporlar();
+                                _loadData();
                                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İş kalemi silindi')));
                               }
                             },
@@ -245,11 +303,12 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                           ),
                         ],
                       ]),
-                      if (is_.kategori != null || is_.bahceAdi != null || is_.sure != null) ...[
+                      if (is_.kategori != null || is_.bahceAdi != null || is_.parselAdi != null || is_.sure != null) ...[
                         const SizedBox(height: 8),
                         Wrap(spacing: 8, children: [
                           if (is_.kategori != null) _buildMiniTag(is_.kategori!, const Color(0xFF059669)),
-                          if (is_.bahceAdi != null) _buildMiniTag('📍 ${is_.bahceAdi}', Colors.blueGrey),
+                          if (is_.bahceAdi != null) _buildMiniTag('🌿 ${is_.bahceAdi}', const Color(0xFFD97706)),
+                          if (is_.parselAdi != null) _buildMiniTag('📍 ${is_.parselAdi}', Colors.blueGrey),
                           if (is_.sure != null) _buildMiniTag('⏱ ${is_.sure!.toStringAsFixed(1)} saat', Colors.purple),
                         ]),
                       ],
@@ -281,14 +340,13 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                 Text('Genel Not: ${rapor.genelNot}', style: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
               ],
               const SizedBox(height: 16),
-              // Aksiyon butonları
               if (!rapor.onaylandi && auth.canVerifyDailyReport)
                 ElevatedButton.icon(
                   onPressed: () async {
                     final user = auth.currentUser!;
                     await _service.approveReport(rapor.id!, user.id!, user.adSoyad);
                     if (ctx.mounted) Navigator.pop(ctx);
-                    _loadRaporlar();
+                    _loadData();
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapor onaylandı ve kilitlendi ✓')));
                   },
                   icon: const Icon(Icons.verified),
@@ -328,7 +386,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                       if (onay == true) {
                         await _service.deleteDailyReport(rapor.id!);
                         if (ctx.mounted) Navigator.pop(ctx);
-                        _loadRaporlar();
+                        _loadData();
                         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapor silindi')));
                       }
                     },
@@ -364,12 +422,33 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
     final genelNotController = TextEditingController();
     List<IsKalemi> isler = [];
 
+    // Bahçe seçimi
+    String? seciliBahceId;
+    String? seciliBahceAdi;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Yeni Günlük Rapor'),
           content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Bahçe seçimi
+            DropdownButtonFormField<String?>(
+              value: seciliBahceId,
+              decoration: InputDecoration(
+                labelText: 'Bahçe *',
+                prefixIcon: const Icon(Icons.park, color: Color(0xFFD97706)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: _bahceler.map((b) => DropdownMenuItem(value: b.id, child: Text(b.ad))).toList(),
+              onChanged: (v) {
+                setDialogState(() {
+                  seciliBahceId = v;
+                  seciliBahceAdi = v != null ? _bahceler.firstWhere((b) => b.id == v).ad : null;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.calendar_today, color: Color(0xFFD97706)),
@@ -381,23 +460,29 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
               },
             ),
             const Divider(),
-            // İş kalemleri listesi
             if (isler.isNotEmpty) ...[
               ...isler.asMap().entries.map((entry) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(radius: 14, backgroundColor: const Color(0xFFD97706).withOpacity(0.1),
                     child: Text('${entry.key + 1}', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706)))),
                 title: Text(entry.value.aciklama, style: const TextStyle(fontSize: 14)),
-                subtitle: entry.value.kategori != null ? Text(entry.value.kategori!, style: const TextStyle(fontSize: 13)) : null,
+                subtitle: Wrap(spacing: 6, children: [
+                  if (entry.value.kategori != null) Text(entry.value.kategori!, style: const TextStyle(fontSize: 13)),
+                  if (entry.value.bahceAdi != null) Text('🌿 ${entry.value.bahceAdi}', style: const TextStyle(fontSize: 12, color: Color(0xFFD97706))),
+                  if (entry.value.parselAdi != null) Text('📍 ${entry.value.parselAdi}', style: const TextStyle(fontSize: 12)),
+                ]),
                 trailing: IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red, size: 20),
                     onPressed: () => setDialogState(() => isler.removeAt(entry.key))),
               )),
               const Divider(),
             ],
-            // Yeni iş kalemi ekleme butonu
             TextButton.icon(
               onPressed: () {
-                _showIsKalemiQuickAdd(ctx, (isKalemi) {
+                // Seçili bahçeyi iş kalemine ilet
+                final bahce = seciliBahceId != null
+                    ? _bahceler.where((b) => b.id == seciliBahceId).firstOrNull
+                    : null;
+                _showIsKalemiQuickAdd(ctx, bahce, (isKalemi) {
                   setDialogState(() => isler.add(isKalemi));
                 });
               },
@@ -411,6 +496,10 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
             ElevatedButton(
               onPressed: () async {
+                if (seciliBahceId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lütfen bahçe seçin')));
+                  return;
+                }
                 if (isler.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('En az 1 iş kalemi ekleyin')));
                   return;
@@ -419,11 +508,13 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                   kullaniciId: user.id ?? '',
                   kullaniciAdi: user.adSoyad,
                   tarih: tarih,
+                  bahceId: seciliBahceId,
+                  bahceAdi: seciliBahceAdi,
                   isler: isler,
                   genelNot: genelNotController.text.trim().isNotEmpty ? genelNotController.text.trim() : null,
                 ));
                 if (ctx.mounted) Navigator.pop(ctx);
-                _loadRaporlar();
+                _loadData();
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Rapor kaydedildi ✓')));
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
@@ -437,10 +528,11 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
 
   static const _kategoriler = ['Sulama', 'Budama', 'İlaçlama', 'Dikim', 'Hasat', 'Bakım', 'Temizlik', 'Diğer'];
 
-  void _showIsKalemiQuickAdd(BuildContext parentCtx, Function(IsKalemi) onAdd) {
+  void _showIsKalemiQuickAdd(BuildContext parentCtx, Bahce? bahce, Function(IsKalemi) onAdd) {
     final aciklamaController = TextEditingController();
     String? kategori;
     final sureController = TextEditingController();
+    String? parselAdi;
 
     showDialog(
       context: context,
@@ -450,6 +542,23 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
           content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: aciklamaController, decoration: InputDecoration(labelText: 'Açıklama *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
             const SizedBox(height: 14),
+            // Parsel seçimi (bahçe seçiliyse)
+            if (bahce != null && bahce.parseller.isNotEmpty) ...[
+              DropdownButtonFormField<String?>(
+                value: parselAdi,
+                decoration: InputDecoration(
+                  labelText: 'Parsel',
+                  prefixIcon: const Icon(Icons.grid_view, color: Color(0xFF059669)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Genel')),
+                  ...bahce.parseller.map((p) => DropdownMenuItem(value: p.ad, child: Text(p.ad))),
+                ],
+                onChanged: (v) => setDialogState(() => parselAdi = v),
+              ),
+              const SizedBox(height: 14),
+            ],
             DropdownButtonFormField<String>(
               value: kategori,
               decoration: InputDecoration(labelText: 'Kategori', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -466,6 +575,8 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                 if (aciklamaController.text.trim().isEmpty) return;
                 onAdd(IsKalemi(
                   aciklama: aciklamaController.text.trim(),
+                  bahceAdi: bahce?.ad,
+                  parselAdi: parselAdi,
                   kategori: kategori,
                   sure: double.tryParse(sureController.text),
                 ));
@@ -485,6 +596,12 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
     final aciklamaCtrl = TextEditingController(text: is_.aciklama);
     String? kategori = is_.kategori;
     final sureCtrl = TextEditingController(text: is_.sure?.toStringAsFixed(1) ?? '');
+    String? parselAdi = is_.parselAdi;
+
+    // Rapordaki bahçeyi bul
+    final bahce = rapor.bahceId != null
+        ? _bahceler.where((b) => b.id == rapor.bahceId).firstOrNull
+        : null;
 
     showDialog(
       context: context,
@@ -494,6 +611,22 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
           content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: aciklamaCtrl, decoration: InputDecoration(labelText: 'Açıklama *', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
             const SizedBox(height: 14),
+            if (bahce != null && bahce.parseller.isNotEmpty) ...[
+              DropdownButtonFormField<String?>(
+                value: parselAdi,
+                decoration: InputDecoration(
+                  labelText: 'Parsel',
+                  prefixIcon: const Icon(Icons.grid_view, color: Color(0xFF059669)),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Genel')),
+                  ...bahce.parseller.map((p) => DropdownMenuItem(value: p.ad, child: Text(p.ad))),
+                ],
+                onChanged: (v) => setDialogState(() => parselAdi = v),
+              ),
+              const SizedBox(height: 14),
+            ],
             DropdownButtonFormField<String>(
               value: kategori,
               decoration: InputDecoration(labelText: 'Kategori', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -514,12 +647,12 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                   kategori: kategori,
                   sure: double.tryParse(sureCtrl.text.replaceAll(',', '.')),
                   bahceAdi: is_.bahceAdi,
-                  parselAdi: is_.parselAdi,
+                  parselAdi: parselAdi,
                   fotograflar: is_.fotograflar,
                 );
                 await _service.updateDailyReport(rapor.copyWith(isler: guncelIsler));
                 if (ctx.mounted) Navigator.pop(ctx);
-                _loadRaporlar();
+                _loadData();
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İş kalemi güncellendi ✓')));
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
@@ -532,10 +665,13 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
   }
 
   void _showIsEkleDialog(DailyWorkReport rapor) {
-    _showIsKalemiQuickAdd(context, (isKalemi) async {
+    final bahce = rapor.bahceId != null
+        ? _bahceler.where((b) => b.id == rapor.bahceId).firstOrNull
+        : null;
+    _showIsKalemiQuickAdd(context, bahce, (isKalemi) async {
       final guncelIsler = List<IsKalemi>.from(rapor.isler)..add(isKalemi);
       await _service.updateDailyReport(rapor.copyWith(isler: guncelIsler));
-      _loadRaporlar();
+      _loadData();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('İş kalemi eklendi')));
     });
   }

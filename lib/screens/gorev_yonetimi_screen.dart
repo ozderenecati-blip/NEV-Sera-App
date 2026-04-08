@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/gorev.dart';
+import '../models/bahce.dart';
 import '../providers/auth_provider.dart';
 import '../services/operasyon_service.dart';
 
@@ -16,15 +17,18 @@ class GorevYonetimiScreen extends StatefulWidget {
 class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTickerProviderStateMixin {
   final OperasyonService _service = OperasyonService();
   List<Gorev> _gorevler = [];
+  List<Bahce> _bahceler = [];
   bool _isLoading = true;
   late TabController _tabController;
   final _dateFormat = DateFormat('dd.MM.yyyy', 'tr_TR');
+
+  String? _seciliBahceId; // null = Tümü
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadGorevler();
+    _loadData();
   }
 
   @override
@@ -33,11 +37,13 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     super.dispose();
   }
 
-  Future<void> _loadGorevler() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final auth = context.read<AuthProvider>();
     final user = auth.currentUser;
     if (user == null) return;
+
+    _bahceler = await _service.getBahceler();
 
     if (auth.canAssignTask) {
       _gorevler = await _service.getGorevler();
@@ -47,9 +53,20 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     setState(() => _isLoading = false);
   }
 
-  List<Gorev> get _aktifGorevler => _gorevler.where((g) => g.durum == GorevDurum.beklemede || g.durum == GorevDurum.devamEdiyor).toList();
-  List<Gorev> get _tamamlananGorevler => _gorevler.where((g) => g.durum == GorevDurum.tamamlandi).toList();
-  List<Gorev> get _yaklasanGorevler => _gorevler.where((g) => g.yaklasan || g.gecmis).toList();
+  List<Gorev> get _filtrelenmisGorevler {
+    if (_seciliBahceId == null) return _gorevler;
+    return _gorevler.where((g) => g.bahceId == _seciliBahceId).toList();
+  }
+
+  List<Gorev> get _aktifGorevler => _filtrelenmisGorevler
+      .where((g) => g.durum == GorevDurum.beklemede || g.durum == GorevDurum.devamEdiyor)
+      .toList();
+  List<Gorev> get _tamamlananGorevler => _filtrelenmisGorevler
+      .where((g) => g.durum == GorevDurum.tamamlandi)
+      .toList();
+  List<Gorev> get _yaklasanGorevler => _filtrelenmisGorevler
+      .where((g) => g.yaklasan || g.gecmis)
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +75,21 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     return Scaffold(
       body: Column(
         children: [
+          if (_bahceler.isNotEmpty)
+            SizedBox(
+              height: 50,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                children: [
+                  _buildFilterChip(null, 'Tümü (${_gorevler.length})'),
+                  ..._bahceler.map((b) {
+                    final count = _gorevler.where((g) => g.bahceId == b.id).length;
+                    return _buildFilterChip(b.id, '${b.ad} ($count)');
+                  }),
+                ],
+              ),
+            ),
           TabBar(
             controller: _tabController,
             labelColor: const Color(0xFFD97706),
@@ -95,6 +127,20 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     );
   }
 
+  Widget _buildFilterChip(String? bahceId, String label) {
+    final isSelected = _seciliBahceId == bahceId;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        selected: isSelected,
+        label: Text(label, style: TextStyle(fontSize: 13, color: isSelected ? Colors.white : null)),
+        selectedColor: const Color(0xFFD97706),
+        checkmarkColor: Colors.white,
+        onSelected: (_) => setState(() => _seciliBahceId = bahceId),
+      ),
+    );
+  }
+
   Widget _buildGorevList(List<Gorev> gorevler, String emptyText) {
     if (gorevler.isEmpty) {
       return Center(
@@ -107,7 +153,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     }
 
     return RefreshIndicator(
-      onRefresh: _loadGorevler,
+      onRefresh: _loadData,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
         itemCount: gorevler.length,
@@ -175,6 +221,8 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
                     _buildTag(Icons.person, gorev.atananKullaniciAdi!, Colors.teal),
                   if (gorev.bahceAdi != null)
                     _buildTag(Icons.park, gorev.bahceAdi!, const Color(0xFFD97706)),
+                  if (gorev.parselAdi != null)
+                    _buildTag(Icons.grid_view, gorev.parselAdi!, const Color(0xFF059669)),
                 ],
               ),
             ],
@@ -217,6 +265,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
             _buildDetailChip('Tarih', _dateFormat.format(gorev.baslangicTarihi)),
             if (gorev.atananKullaniciAdi != null) _buildDetailChip('Atanan', gorev.atananKullaniciAdi!),
             if (gorev.bahceAdi != null) _buildDetailChip('Bahçe', gorev.bahceAdi!),
+            if (gorev.parselAdi != null) _buildDetailChip('Parsel', gorev.parselAdi!),
             if (gorev.atayan != null) _buildDetailChip('Atayan', gorev.atayan!),
           ]),
           if (gorev.tamamlayanNot != null) ...[
@@ -224,7 +273,6 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
             Text('Tamamlama Notu: ${gorev.tamamlayanNot}', style: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic)),
           ],
           const SizedBox(height: 20),
-          // Aksiyon butonları
           if (gorev.durum != GorevDurum.tamamlandi && gorev.durum != GorevDurum.iptalEdildi)
             Row(children: [
               Expanded(
@@ -288,7 +336,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     if (result == true) {
       await _service.gorevTamamla(gorev.id!, not: notController.text.trim().isNotEmpty ? notController.text.trim() : null);
       if (sheetContext.mounted) Navigator.pop(sheetContext);
-      _loadGorevler();
+      _loadData();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Görev tamamlandı ✓')));
     }
   }
@@ -303,9 +351,15 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
     String? atananId = gorev?.atananKullaniciId;
     String? atananAdi = gorev?.atananKullaniciAdi;
 
-    // Çalışanları yükle
-    final calisanlar = await context.read<AuthProvider>().getCalisanlar();
+    String? seciliBahceId = gorev?.bahceId;
+    String? seciliBahceAdi = gorev?.bahceAdi;
+    String? seciliParselAdi = gorev?.parselAdi;
+    Bahce? seciliBahce;
+    if (seciliBahceId != null) {
+      seciliBahce = _bahceler.where((b) => b.id == seciliBahceId).firstOrNull;
+    }
 
+    final calisanlar = await context.read<AuthProvider>().getCalisanlar();
     if (!mounted) return;
 
     showDialog(
@@ -318,6 +372,40 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
             const SizedBox(height: 14),
             TextField(controller: aciklamaController, maxLines: 2, decoration: InputDecoration(labelText: 'Açıklama', prefixIcon: const Icon(Icons.description), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
             const SizedBox(height: 14),
+
+            // Bahçe seçimi
+            DropdownButtonFormField<String?>(
+              value: seciliBahceId,
+              decoration: InputDecoration(labelText: 'Bahçe', prefixIcon: const Icon(Icons.park, color: Color(0xFFD97706)), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+              items: [
+                const DropdownMenuItem<String?>(value: null, child: Text('Seçilmedi')),
+                ..._bahceler.map((b) => DropdownMenuItem(value: b.id, child: Text(b.ad))),
+              ],
+              onChanged: (v) {
+                setDialogState(() {
+                  seciliBahceId = v;
+                  seciliBahce = v != null ? _bahceler.firstWhere((b) => b.id == v) : null;
+                  seciliBahceAdi = seciliBahce?.ad;
+                  seciliParselAdi = null;
+                });
+              },
+            ),
+            const SizedBox(height: 14),
+
+            // Parsel seçimi
+            if (seciliBahce != null && seciliBahce!.parseller.isNotEmpty) ...[
+              DropdownButtonFormField<String?>(
+                value: seciliParselAdi,
+                decoration: InputDecoration(labelText: 'Parsel', prefixIcon: const Icon(Icons.grid_view, color: Color(0xFF059669)), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Tümü / Genel')),
+                  ...seciliBahce!.parseller.map((p) => DropdownMenuItem(value: p.ad, child: Text(p.ad))),
+                ],
+                onChanged: (v) => setDialogState(() => seciliParselAdi = v),
+              ),
+              const SizedBox(height: 14),
+            ],
+
             DropdownButtonFormField<GorevOncelik>(
               value: oncelik,
               decoration: InputDecoration(labelText: 'Öncelik', prefixIcon: const Icon(Icons.flag), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -332,7 +420,6 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
               onChanged: (v) => setDialogState(() => tekrar = v!),
             ),
             const SizedBox(height: 14),
-            // Atanan kişi
             DropdownButtonFormField<String?>(
               value: atananId,
               decoration: InputDecoration(labelText: 'Atanan Kişi', prefixIcon: const Icon(Icons.person), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
@@ -348,7 +435,6 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
               },
             ),
             const SizedBox(height: 14),
-            // Tarih
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.calendar_today, color: Color(0xFFD97706)),
@@ -375,6 +461,8 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
                     aciklama: aciklamaController.text.trim(),
                     oncelik: oncelik, tekrar: tekrar,
                     atananKullaniciId: atananId, atananKullaniciAdi: atananAdi,
+                    bahceId: seciliBahceId, bahceAdi: seciliBahceAdi,
+                    parselAdi: seciliParselAdi,
                     baslangicTarihi: baslangic,
                   ));
                 } else {
@@ -384,11 +472,13 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
                     oncelik: oncelik, tekrar: tekrar,
                     atananKullaniciId: atananId, atananKullaniciAdi: atananAdi,
                     atayan: auth.currentUser?.adSoyad,
+                    bahceId: seciliBahceId, bahceAdi: seciliBahceAdi,
+                    parselAdi: seciliParselAdi,
                     baslangicTarihi: baslangic,
                   ));
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
-                _loadGorevler();
+                _loadData();
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
               child: Text(isEdit ? 'Güncelle' : 'Ekle'),

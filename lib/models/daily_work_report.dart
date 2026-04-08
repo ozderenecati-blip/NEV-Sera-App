@@ -41,6 +41,8 @@ class DailyWorkReport {
   final String kullaniciId;
   final String kullaniciAdi;
   final DateTime tarih;
+  final String? bahceId;
+  final String? bahceAdi;
   final List<IsKalemi> isler;
   final String? genelNot;
   final bool onaylandi; // admin verify
@@ -54,6 +56,8 @@ class DailyWorkReport {
     required this.kullaniciId,
     required this.kullaniciAdi,
     required this.tarih,
+    this.bahceId,
+    this.bahceAdi,
     this.isler = const [],
     this.genelNot,
     this.onaylandi = false,
@@ -78,6 +82,8 @@ class DailyWorkReport {
         'kullanici_id': kullaniciId,
         'kullanici_adi': kullaniciAdi,
         'tarih': tarih.toIso8601String(),
+        'bahce_id': bahceId,
+        'bahce_adi': bahceAdi,
         'isler': isler.map((i) => i.toMap()).toList(),
         'genel_not': genelNot,
         'onaylandi': onaylandi,
@@ -99,6 +105,8 @@ class DailyWorkReport {
       tarih: map['tarih'] != null
           ? DateTime.tryParse(map['tarih']) ?? DateTime.now()
           : DateTime.now(),
+      bahceId: map['bahce_id'],
+      bahceAdi: map['bahce_adi'],
       isler: islerList,
       genelNot: map['genel_not'],
       onaylandi: map['onaylandi'] ?? false,
@@ -114,6 +122,8 @@ class DailyWorkReport {
   }
 
   DailyWorkReport copyWith({
+    String? bahceId,
+    String? bahceAdi,
     List<IsKalemi>? isler,
     String? genelNot,
     bool? onaylandi,
@@ -126,6 +136,8 @@ class DailyWorkReport {
         kullaniciId: kullaniciId,
         kullaniciAdi: kullaniciAdi,
         tarih: tarih,
+        bahceId: bahceId ?? this.bahceId,
+        bahceAdi: bahceAdi ?? this.bahceAdi,
         isler: isler ?? this.isler,
         genelNot: genelNot ?? this.genelNot,
         onaylandi: onaylandi ?? this.onaylandi,

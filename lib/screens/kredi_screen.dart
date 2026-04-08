@@ -419,6 +419,7 @@ class KrediScreen extends StatelessWidget {
     String krediId = '';
     String krediAdi = '';
     String bankaAd = '';
+    DateTime baslangicTarihi = DateTime.now();
     double cekilenTutar = 0;
     double faizOrani = 0;
     int vadeAy = 12;
@@ -485,6 +486,32 @@ class KrediScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         
+                          // Başlangıç Tarihi
+                          InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: baslangicTarihi,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2040),
+                                locale: const Locale('tr', 'TR'),
+                              );
+                              if (picked != null) {
+                                setModalState(() => baslangicTarihi = picked);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Başlangıç Tarihi *',
+                                prefixIcon: Icon(Icons.calendar_today),
+                              ),
+                              child: Text(
+                                DateFormat('dd MMM yyyy', 'tr_TR').format(baslangicTarihi),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          
                         TextFormField(
                           decoration: const InputDecoration(
                             labelText: 'Çekilen Tutar',
@@ -612,6 +639,7 @@ class KrediScreen extends StatelessWidget {
                                 odemeSikligiAy: odemeSikligiAy,
                                 kkdfOrani: kkdfOrani,
                                 bsmvOrani: bsmvOrani,
+                                baslangicTarihi: baslangicTarihi,
                               );
                               
                               final success = await context.read<AppProvider>().addKredi(kredi);

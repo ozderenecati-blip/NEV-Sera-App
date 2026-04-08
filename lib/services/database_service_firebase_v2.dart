@@ -67,16 +67,21 @@ class DatabaseService {
       case 'resmilestirme':
       case 'gider_pusulasi_vergi':
       case 'maas_odemesi':
+        case 'gundelikci':
         return 'gundelikciler';
       case 'kredi_odeme':
         return 'krediler';
       case 'ortak_avans':
       case 'ortak_geri_odeme':
       case 'ortak_stopaj':
+        case 'ortak':
         return 'ortaklar';
       case 'cari_odeme':
       case 'cari_tahsilat':
         return 'cariler';
+        case 'musteri_tahsilat':
+        case 'satis':
+          return 'musteriler';
       default:
         return '';
     }
@@ -157,6 +162,7 @@ class DatabaseService {
         'tl_karsiligi': hareket.tlKarsiligi,
         'islem_kaynagi': hareket.islemKaynagi,
         'iliskili_id': hareket.iliskiliId,
+        'iliskili_doc_id': hareket.iliskiliId != null ? _getDocId(_guessCollection(hareket.islemKaynagi), hareket.iliskiliId!) : null,
         'fis_url': hareket.fisUrl,
       });
       return 1;
@@ -325,7 +331,7 @@ class DatabaseService {
   Future<int> insertKredi(Kredi k) async {
     try {
       final docRef = await _db.collection('krediler').add(k.toMap());
-      return docRef.id.hashCode.abs();
+      return _getIntId('krediler', docRef.id);
     } catch (e) {
       print('insertKredi error: $e');
       return -1;
@@ -935,7 +941,9 @@ class DatabaseService {
   // ==================== SATIŞLAR ====================
   Future<int> insertSatis(Satis s) async {
     try {
-      final docRef = await _db.collection('satislar').add(s.toMap());
+      final map = s.toMap();
+      map['musteri_doc_id'] = _getDocId('musteriler', s.musteriId);
+      final docRef = await _db.collection('satislar').add(map);
       return _getIntId('satislar', docRef.id);
     } catch (e) {
       print('insertSatis error: $e');
@@ -949,6 +957,11 @@ class DatabaseService {
       List<Satis> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('satislar', doc.id);
+          // musteri_doc_id varsa stabil int ID'ye cevir
+          final musteriDocId = data['musteri_doc_id'] as String?;
+          if (musteriDocId != null && musteriDocId.isNotEmpty) {
+            data['musteri_id'] = _getIntId('musteriler', musteriDocId);
+          }
         return Satis.fromMap(data);
       }).toList();
       
@@ -983,7 +996,9 @@ class DatabaseService {
       final docId = _getDocId('satislar', s.id!);
       if (docId == null) return 0;
       
-      await _db.collection('satislar').doc(docId).update(s.toMap());
+        final map = s.toMap();
+        map['musteri_doc_id'] = _getDocId('musteriler', s.musteriId);
+        await _db.collection('satislar').doc(docId).update(map);
       return 1;
     } catch (e) {
       print('updateSatis error: $e');
@@ -1057,6 +1072,15 @@ class DatabaseService {
   // ==================== TAHSİLATLAR ====================
   Future<int> insertTahsilat(Map<String, dynamic> t) async {
     try {
+      // musteri_id ve satis_id icin doc ID'lerini de sakla
+      final mId = t['musteri_id'];
+      if (mId is int) {
+        t['musteri_doc_id'] = _getDocId('musteriler', mId);
+      }
+      final sId = t['satis_id'];
+      if (sId is int) {
+        t['satis_doc_id'] = _getDocId('satislar', sId);
+      }
       final docRef = await _db.collection('tahsilatlar').add(t);
       return _getIntId('tahsilatlar', docRef.id);
     } catch (e) {
@@ -1073,6 +1097,16 @@ class DatabaseService {
       List<Map<String, dynamic>> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('tahsilatlar', doc.id);
+          // musteri_doc_id varsa stabil int ID'ye cevir
+          final musteriDocId2 = data['musteri_doc_id'] as String?;
+          if (musteriDocId2 != null && musteriDocId2.isNotEmpty) {
+            data['musteri_id'] = _getIntId('musteriler', musteriDocId2);
+          }
+          // satis_doc_id varsa stabil int ID'ye cevir
+          final satisDocId = data['satis_doc_id'] as String?;
+          if (satisDocId != null && satisDocId.isNotEmpty) {
+            data['satis_id'] = _getIntId('satislar', satisDocId);
+          }
         // Müşteri unvanını ekle
         final mId = data['musteri_id'];
         final musteri = musteriler.where((m) => m.id == mId).firstOrNull;
@@ -1120,6 +1154,13 @@ class DatabaseService {
       final docId = _getDocId('tahsilatlar', id);
       if (docId == null) return 0;
       
+      // musteri_doc_id ve satis_doc_id'yi de guncelle
+      if (t['musteri_id'] is int) {
+        t['musteri_doc_id'] = _getDocId('musteriler', t['musteri_id']);
+      }
+      if (t['satis_id'] is int) {
+        t['satis_doc_id'] = _getDocId('satislar', t['satis_id']);
+      }
       await _db.collection('tahsilatlar').doc(docId).update(t);
       return 1;
     } catch (e) {
@@ -1246,7 +1287,9 @@ class DatabaseService {
     try {
       final docId = _getDocId('cari_anlasmalar', a.id!);
       if (docId == null) return 0;
-      await _db.collection('cari_anlasmalar').doc(docId).update(a.toFirestoreMap());
+      final map = a.toFirestoreMap();
+      map['cari_doc_id'] = _getDocId('cariler', a.cariId);
+      await _db.collection('cari_anlasmalar').doc(docId).update(map);
       return 1;
     } catch (e) {
       print('updateCariAnlasma error: $e');

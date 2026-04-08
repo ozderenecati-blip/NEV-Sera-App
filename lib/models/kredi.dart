@@ -157,7 +157,7 @@ class KrediTaksit {
       'kkdf': kkdf,
       'toplam_taksit': toplamTaksit,
       'kalan_bakiye': kalanBakiye,
-      'odendi': odendi ? 1 : 0,
+      'odendi': odendi,
     };
   }
 

@@ -24,9 +24,12 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
   List<GubreTank> _tanklar = [];
   List<GubreEnvanter> _envanter = [];
   bool _isLoading = true;
+  bool _isProcessing = false; // Çift tıklama koruması
 
   String? _seciliBahceId;
   String? _seciliBahceAdi;
+
+  Future<List<KatlamaKaydi>>? _gecmisKayitlariFuture; // FutureBuilder cache
 
   late TabController _tabController;
 
@@ -61,6 +64,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
     if (_seciliBahceId == null) return;
     _tanklar = await _service.getTanklar(bahceId: _seciliBahceId);
     _envanter = await _service.getEnvanter(bahceId: _seciliBahceId);
+    _gecmisKayitlariFuture = _service.getKatlamaKayitlari(bahceId: _seciliBahceId);
   }
 
   Future<void> _refresh() async {
@@ -406,8 +410,9 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
   // ═══════════════ GEÇMİŞ TAB ═══════════════
 
   Widget _buildGecmisTab() {
+    _gecmisKayitlariFuture ??= _service.getKatlamaKayitlari(bahceId: _seciliBahceId);
     return FutureBuilder<List<KatlamaKaydi>>(
-      future: _service.getKatlamaKayitlari(bahceId: _seciliBahceId),
+      future: _gecmisKayitlariFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -532,25 +537,30 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: _isProcessing ? null : () async {
               if (adController.text.trim().isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tank adı zorunlu')));
                 return;
               }
-              final hacim = double.tryParse(hacimController.text) ?? 0;
-              if (isEdit) {
-                await _service.updateTank(tank.copyWith(ad: adController.text.trim(), hacim: hacim));
-              } else {
-                await _service.addTank(GubreTank(
-                  bahceId: _seciliBahceId!,
-                  bahceAdi: _seciliBahceAdi!,
-                  ad: adController.text.trim(),
-                  hacim: hacim,
-                  recete: [],
-                ));
+              setState(() => _isProcessing = true);
+              try {
+                final hacim = double.tryParse(hacimController.text) ?? 0;
+                if (isEdit) {
+                  await _service.updateTank(tank.copyWith(ad: adController.text.trim(), hacim: hacim));
+                } else {
+                  await _service.addTank(GubreTank(
+                    bahceId: _seciliBahceId!,
+                    bahceAdi: _seciliBahceAdi!,
+                    ad: adController.text.trim(),
+                    hacim: hacim,
+                    recete: [],
+                  ));
+                }
+                if (ctx.mounted) Navigator.pop(ctx);
+                _refresh();
+              } finally {
+                if (mounted) setState(() => _isProcessing = false);
               }
-              if (ctx.mounted) Navigator.pop(ctx);
-              _refresh();
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
             child: Text(isEdit ? 'Güncelle' : 'Ekle'),
@@ -776,32 +786,38 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
               ElevatedButton.icon(
-                onPressed: () async {
-                  final yeniRecete = <ReceteKalemi>[];
-                  for (final s in satirlar) {
-                    final gubreAdi = s.gubreCtrl.text.trim();
-                    final miktar = double.tryParse(s.miktarCtrl.text) ?? 0;
-                    if (gubreAdi.isNotEmpty && miktar > 0) {
-                      yeniRecete.add(ReceteKalemi(gubreAdi: gubreAdi, miktar: miktar, birim: s.birim));
+                onPressed: _isProcessing ? null : () async {
+                  setState(() => _isProcessing = true);
+                  try {
+                    final yeniRecete = <ReceteKalemi>[];
+                    for (final s in satirlar) {
+                      final gubreAdi = s.gubreCtrl.text.trim();
+                      final miktar = double.tryParse(s.miktarCtrl.text) ?? 0;
+                      if (gubreAdi.isNotEmpty && miktar > 0) {
+                        yeniRecete.add(ReceteKalemi(gubreAdi: gubreAdi, miktar: miktar, birim: s.birim));
+                      }
                     }
-                  }
-                  final auth = context.read<AuthProvider>();
-                  final user = auth.currentUser;
-                  if (user != null) {
-                    await _service.addReceteGecmisi(ReceteGecmisi(
-                      bahceId: tank.bahceId, bahceAdi: tank.bahceAdi,
-                      tankId: tank.id!, tankAdi: tank.ad,
-                      recete: yeniRecete,
-                      degistirenKullaniciId: user.id ?? '',
-                      degistirenKullaniciAdi: user.adSoyad,
-                      not: notCtrl.text.trim(),
-                    ));
-                  }
-                  await _service.updateTank(tank.copyWith(recete: yeniRecete));
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _refresh();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tank ${tank.ad} reçetesi güncellendi ✓')));
+                    final auth = context.read<AuthProvider>();
+                    final user = auth.currentUser;
+                    // Sadece reçete boş değilse veya önceki reçete doluysa geçmiş kaydet
+                    if (user != null && (yeniRecete.isNotEmpty || tank.recete.isNotEmpty)) {
+                      await _service.addReceteGecmisi(ReceteGecmisi(
+                        bahceId: tank.bahceId, bahceAdi: tank.bahceAdi,
+                        tankId: tank.id!, tankAdi: tank.ad,
+                        recete: yeniRecete,
+                        degistirenKullaniciId: user.id ?? '',
+                        degistirenKullaniciAdi: user.adSoyad,
+                        not: notCtrl.text.trim(),
+                      ));
+                    }
+                    await _service.updateTank(tank.copyWith(recete: yeniRecete));
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _refresh();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tank ${tank.ad} reçetesi güncellendi ✓')));
+                    }
+                  } finally {
+                    if (mounted) setState(() => _isProcessing = false);
                   }
                 },
                 icon: const Icon(Icons.save, size: 18),
@@ -995,23 +1011,28 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
               ElevatedButton.icon(
-                onPressed: () async {
-                  final auth = context.read<AuthProvider>();
-                  final user = auth.currentUser;
-                  if (user == null) return;
-                  for (final r in katlanmisRecete) {
-                    final envItem = _envanter.where((e) => e.gubreAdi.toLowerCase() == r.gubreAdi.toLowerCase() && e.bahceId == _seciliBahceId).firstOrNull;
-                    if (envItem != null) await _service.envanterdenDus(envItem.id!, r.miktar);
+                onPressed: _isProcessing ? null : () async {
+                  setState(() => _isProcessing = true);
+                  try {
+                    final auth = context.read<AuthProvider>();
+                    final user = auth.currentUser;
+                    if (user == null) return;
+                    for (final r in katlanmisRecete) {
+                      final envItem = _envanter.where((e) => e.gubreAdi.toLowerCase() == r.gubreAdi.toLowerCase() && e.bahceId == _seciliBahceId).firstOrNull;
+                      if (envItem != null) await _service.envanterdenDus(envItem.id!, r.miktar);
+                    }
+                    await _service.addKatlamaKaydi(KatlamaKaydi(
+                      bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!,
+                      tankId: tank.id!, tankAdi: tank.ad,
+                      katlama: katlama, kullanilanGubreler: katlanmisRecete,
+                      yapanKullaniciId: user.id ?? '', yapanKullaniciAdi: user.adSoyad,
+                    ));
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _refresh();
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tank ${tank.ad} — ${katlama}x katlama uygulandı ✓')));
+                  } finally {
+                    if (mounted) setState(() => _isProcessing = false);
                   }
-                  await _service.addKatlamaKaydi(KatlamaKaydi(
-                    bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!,
-                    tankId: tank.id!, tankAdi: tank.ad,
-                    katlama: katlama, kullanilanGubreler: katlanmisRecete,
-                    yapanKullaniciId: user.id ?? '', yapanKullaniciAdi: user.adSoyad,
-                  ));
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  _refresh();
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Tank ${tank.ad} — ${katlama}x katlama uygulandı ✓')));
                 },
                 icon: const Icon(Icons.check_circle),
                 label: const Text('Onayla & Uygula'),
@@ -1065,17 +1086,22 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: _isProcessing ? null : () async {
                 if (gubreCtrl.text.trim().isEmpty) return;
-                final miktar = double.tryParse(miktarCtrl.text) ?? 0;
-                final sinir = double.tryParse(sinirCtrl.text) ?? 0;
-                if (isEdit) {
-                  await _service.updateEnvanter(envanter.copyWith(miktar: miktar, uyariSiniri: sinir));
-                } else {
-                  await _service.addEnvanter(GubreEnvanter(bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!, gubreAdi: gubreCtrl.text.trim(), miktar: miktar, birim: birim, uyariSiniri: sinir));
+                setState(() => _isProcessing = true);
+                try {
+                  final miktar = double.tryParse(miktarCtrl.text) ?? 0;
+                  final sinir = double.tryParse(sinirCtrl.text) ?? 0;
+                  if (isEdit) {
+                    await _service.updateEnvanter(envanter.copyWith(miktar: miktar, uyariSiniri: sinir));
+                  } else {
+                    await _service.addEnvanter(GubreEnvanter(bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!, gubreAdi: gubreCtrl.text.trim(), miktar: miktar, birim: birim, uyariSiniri: sinir));
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _refresh();
+                } finally {
+                  if (mounted) setState(() => _isProcessing = false);
                 }
-                if (ctx.mounted) Navigator.pop(ctx);
-                _refresh();
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
               child: Text(isEdit ? 'Güncelle' : 'Ekle'),
@@ -1103,13 +1129,18 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: _isProcessing ? null : () async {
               final ek = double.tryParse(miktarCtrl.text) ?? 0;
               if (ek <= 0) return;
-              await _service.updateEnvanter(item.copyWith(miktar: item.miktar + ek));
-              if (ctx.mounted) Navigator.pop(ctx);
-              _refresh();
-              if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item.gubreAdi} stoku güncellendi ✓')));
+              setState(() => _isProcessing = true);
+              try {
+                await _service.updateEnvanter(item.copyWith(miktar: item.miktar + ek));
+                if (ctx.mounted) Navigator.pop(ctx);
+                _refresh();
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${item.gubreAdi} stoku güncellendi ✓')));
+              } finally {
+                if (mounted) setState(() => _isProcessing = false);
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), foregroundColor: Colors.white),
             child: const Text('Ekle'),
@@ -1146,27 +1177,57 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
   // ═══════════════ SİLME İŞLEMLERİ ═══════════════
 
   Future<void> _silKatlamaKaydi(KatlamaKaydi kayit) async {
-    final onay = await showDialog<bool>(
+    final secim = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
         title: const Text('Katlama Kaydını Sil'),
-        content: Text('Tank ${kayit.tankAdi} — ${kayit.katlama}x katlama kaydı silinecek.\n\nBu işlem geri alınamaz. Emin misiniz?'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Tank ${kayit.tankAdi} — ${kayit.katlama}x katlama kaydı silinecek.'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(8)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.info_outline, size: 18, color: Colors.orange.shade700),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Katlama sırasında envanterden düşülen gübreler geri yüklenebilir.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange.shade900))),
+            ]),
+          ),
+        ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(c, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('Sil'),
+          TextButton(onPressed: () => Navigator.pop(c, null), child: const Text('İptal')),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(c, 'sil'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+            child: const Text('Sadece Sil'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(c, 'sil_geri_yukle'),
+            icon: const Icon(Icons.replay, size: 18),
+            label: const Text('Sil + Geri Yükle'),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD97706), foregroundColor: Colors.white),
           ),
         ],
       ),
     );
-    if (onay == true && kayit.id != null) {
+    if (secim != null && kayit.id != null) {
+      // Envanter geri yükleme
+      if (secim == 'sil_geri_yukle') {
+        for (final g in kayit.kullanilanGubreler) {
+          final envItem = _envanter.where((e) => e.gubreAdi.toLowerCase() == g.gubreAdi.toLowerCase() && e.bahceId == kayit.bahceId).firstOrNull;
+          if (envItem != null) {
+            await _service.updateEnvanter(envItem.copyWith(miktar: envItem.miktar + g.miktar));
+          }
+        }
+      }
       await _service.deleteKatlamaKaydi(kayit.id!);
-      setState(() {}); // FutureBuilder yeniden çalışsın
+      _gecmisKayitlariFuture = _service.getKatlamaKayitlari(bahceId: _seciliBahceId);
+      if (secim == 'sil_geri_yukle') await _loadBahceVerileri(); // envanter güncelle
+      setState(() {});
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Katlama kaydı silindi ✓')),
+          SnackBar(content: Text(secim == 'sil_geri_yukle' ? 'Katlama silindi, gübreler envantere geri yüklendi ✓' : 'Katlama kaydı silindi ✓')),
         );
       }
     }

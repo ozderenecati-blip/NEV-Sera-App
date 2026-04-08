@@ -96,11 +96,12 @@ class OperasyonService {
     try {
       final snapshot = await _gorevlerRef
           .where('atanan_kullanici_id', isEqualTo: kullaniciId)
-          .orderBy('baslangic_tarihi', descending: false)
           .get();
-      return snapshot.docs.map((doc) {
+      final list = snapshot.docs.map((doc) {
         return Gorev.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
       }).toList();
+      list.sort((a, b) => a.baslangicTarihi.compareTo(b.baslangicTarihi));
+      return list;
     } catch (e) {
       debugPrint('getKullaniciGorevleri error: $e');
       return [];
@@ -184,14 +185,15 @@ class OperasyonService {
     try {
       final snapshot = await _reportsRef
           .where('kullanici_id', isEqualTo: kullaniciId)
-          .orderBy('tarih', descending: true)
           .get();
-      return snapshot.docs.map((doc) {
+      final list = snapshot.docs.map((doc) {
         return DailyWorkReport.fromMap(
           doc.data() as Map<String, dynamic>,
           docId: doc.id,
         );
       }).toList();
+      list.sort((a, b) => b.tarih.compareTo(a.tarih));
+      return list;
     } catch (e) {
       debugPrint('getKullaniciRaporlari error: $e');
       return [];
@@ -204,11 +206,24 @@ class OperasyonService {
     final tarihKey =
         '${tarih.year}-${tarih.month.toString().padLeft(2, '0')}-${tarih.day.toString().padLeft(2, '0')}';
     try {
-      final reports = await getKullaniciRaporlari(kullaniciId);
-      return reports.where((r) => r.tarihKey == tarihKey).firstOrNull;
+      final snapshot = await _reportsRef
+          .where('kullanici_id', isEqualTo: kullaniciId)
+          .where('tarih_key', isEqualTo: tarihKey)
+          .get();
+      if (snapshot.docs.isEmpty) return null;
+      return DailyWorkReport.fromMap(
+        snapshot.docs.first.data() as Map<String, dynamic>,
+        docId: snapshot.docs.first.id,
+      );
     } catch (e) {
       debugPrint('getGunlukRapor error: $e');
-      return null;
+      // Fallback: tüm raporlardan filtrele
+      try {
+        final reports = await getKullaniciRaporlari(kullaniciId);
+        return reports.where((r) => r.tarihKey == tarihKey).firstOrNull;
+      } catch (_) {
+        return null;
+      }
     }
   }
 

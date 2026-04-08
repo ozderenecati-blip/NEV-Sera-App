@@ -191,6 +191,10 @@ class AppProvider extends ChangeNotifier {
       if (hareket.islemKaynagi == 'gider_pusulasi' || hareket.islemKaynagi == 'resmilestirme') {
         await loadGundelikciler();
       }
+      // Cari işlemi ise cari bakiyeleri güncelle
+      if (hareket.islemKaynagi == 'cari_odeme' || hareket.islemKaynagi == 'cari_tahsilat') {
+        await loadCariler();
+      }
       return true;
     } catch (e) {
       _error = 'Hata: $e';

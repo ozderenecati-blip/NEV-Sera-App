@@ -267,15 +267,21 @@ class DashboardTab extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // CARİ / ALACAK ÖZET
-                  _buildCariOzet(context, provider, currencyFormat)
+                  // TEDARİKÇİ CARİ ÖZET
+                  _buildTedarikciCariOzet(context, provider, currencyFormat)
                       .animate().fadeIn(delay: 400.ms, duration: 400.ms).slideX(begin: -0.05, end: 0),
+
+                  const SizedBox(height: 12),
+
+                  // CARİ / ALACAK ÖZET (Müşteriler)
+                  _buildCariOzet(context, provider, currencyFormat)
+                      .animate().fadeIn(delay: 500.ms, duration: 400.ms).slideX(begin: 0.05, end: 0),
 
                   const SizedBox(height: 12),
 
                   // SON İŞLEMLER
                   _buildSonIslemler(context, provider, currencyFormat)
-                      .animate().fadeIn(delay: 500.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
+                      .animate().fadeIn(delay: 600.ms, duration: 400.ms).slideY(begin: 0.05, end: 0),
                 ],
               ),
             ),
@@ -1410,6 +1416,148 @@ class DashboardTab extends StatelessWidget {
                       color: h.islemTipi == 'Giriş' ? Colors.green : Colors.red,
                     ),
                   ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTedarikciCariOzet(
+    BuildContext context,
+    AppProvider provider,
+    NumberFormat fmt,
+  ) {
+    final cariler = provider.cariler;
+    if (cariler.isEmpty) return const SizedBox.shrink();
+
+    double toplamBorcumuz = 0;   // Bizim firmalara borcumuz
+    double toplamAlacagimiz = 0; // Firmaların bize borcu
+    int borcluFirmaSayisi = 0;
+    int alacakliSayisi = 0;
+
+    for (final c in cariler) {
+      if (c.kalanBorc > 0) {
+        toplamBorcumuz += c.kalanBorc;
+        borcluFirmaSayisi++;
+      }
+      if (c.kalanAlacak > 0) {
+        toplamAlacagimiz += c.kalanAlacak;
+        alacakliSayisi++;
+      }
+    }
+
+    if (toplamBorcumuz == 0 && toplamAlacagimiz == 0) return const SizedBox.shrink();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.business_center, color: Colors.purple.shade700),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Cari Hesaplar',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Cariler tab'ına git (index 4)
+                    final homeState = context.findAncestorStateOfType<_HomeScreenState>();
+                    if (homeState != null) {
+                      homeState._navigateToTab(4);
+                    }
+                  },
+                  child: const Text('Detay →'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Vereceklerimiz (borcumuz)
+            if (toplamBorcumuz > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.shade100),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_upward, color: Colors.red.shade700, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Vereceklerimiz',
+                            style: TextStyle(fontSize: 13, color: Colors.red.shade800, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            '$borcluFirmaSayisi firmaya borçluyuz',
+                            style: TextStyle(fontSize: 11, color: Colors.red.shade400),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      fmt.format(toplamBorcumuz),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            // Alacaklarımız
+            if (toplamAlacagimiz > 0)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.green.shade100),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.arrow_downward, color: Colors.green.shade700, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Alacaklarımız',
+                            style: TextStyle(fontSize: 13, color: Colors.green.shade800, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            '$alacakliSayisi firma bize borçlu',
+                            style: TextStyle(fontSize: 11, color: Colors.green.shade400),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      fmt.format(toplamAlacagimiz),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
+                    ),
+                  ],
                 ),
               ),
           ],

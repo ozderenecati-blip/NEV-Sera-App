@@ -86,7 +86,7 @@ class _CariScreenState extends State<CariScreen> {
                             Expanded(
                               child: Column(
                                 children: [
-                                  Text('Kalan Borcumuz', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                  Text('Net Bakiye', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                                   const SizedBox(height: 4),
                                   Text(fmt.format(toplamBorcKalan), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
                                 ],
@@ -144,7 +144,7 @@ class _CariScreenState extends State<CariScreen> {
           children: [
             if (cari.netBakiye > 0) ...[
               Icon(Icons.arrow_upward, size: 14, color: Colors.red[400]),
-              Text(' Borcumuz: ${fmt.format(cari.netBakiye)}', style: TextStyle(fontSize: 12, color: Colors.red[600])),
+              Text(' Net Bakiye: ${fmt.format(cari.netBakiye)}', style: TextStyle(fontSize: 12, color: Colors.red[600])),
             ],
             
             if (cari.netBakiye < 0) ...[

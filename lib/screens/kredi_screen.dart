@@ -152,6 +152,10 @@ class KrediScreen extends StatelessWidget {
                           '${kredi.taksitTipi} - ${kredi.vadeAy} Ay',
                           style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                         ),
+                        Text(
+                          'Başlangıç: ${DateFormat('dd MMM yyyy', 'tr_TR').format(kredi.baslangicTarihi)}',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        ),
                       ],
                     ),
                   ),
@@ -297,6 +301,24 @@ class KrediScreen extends StatelessWidget {
                             _buildDetailStat('Çekilen', currencyFormat.format(kredi.cekilenTutar)),
                             _buildDetailStat('Faiz', '%${kredi.faizOrani.toStringAsFixed(2)}'),
                             _buildDetailStat('Vade', '${kredi.vadeAy} Ay'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_today, size: 16, color: Colors.green.shade700),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Başlangıç Tarihi: ${DateFormat('dd MMM yyyy', 'tr_TR').format(kredi.baslangicTarihi)}',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade700),
+                            ),
                           ],
                         ),
                       ),

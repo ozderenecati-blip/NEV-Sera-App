@@ -1,6 +1,7 @@
 class Kredi {
   final int? id;
   final String krediId;
+  final String krediAdi;
   final String bankaAd;
   final String? kasa;
   final double cekilenTutar;
@@ -18,6 +19,7 @@ class Kredi {
   Kredi({
     this.id,
     required this.krediId,
+    this.krediAdi = '',
     required this.bankaAd,
     this.kasa,
     required this.cekilenTutar,
@@ -38,6 +40,7 @@ class Kredi {
     return {
       'id': id,
       'kredi_id': krediId,
+      'kredi_adi': krediAdi,
       'banka_ad': bankaAd,
       'kasa': kasa,
       'cekilen_tutar': cekilenTutar,
@@ -57,6 +60,7 @@ class Kredi {
     return Kredi(
       id: map['id'],
       krediId: map['kredi_id'] ?? '',
+      krediAdi: map['kredi_adi'] ?? '',
       bankaAd: map['banka_ad'] ?? '',
       kasa: map['kasa'],
       cekilenTutar: (map['cekilen_tutar'] ?? 0).toDouble(),
@@ -78,6 +82,7 @@ class Kredi {
   Kredi copyWith({
     int? id,
     String? krediId,
+    String? krediAdi,
     String? bankaAd,
     String? kasa,
     double? cekilenTutar,
@@ -95,6 +100,7 @@ class Kredi {
     return Kredi(
       id: id ?? this.id,
       krediId: krediId ?? this.krediId,
+      krediAdi: krediAdi ?? this.krediAdi,
       bankaAd: bankaAd ?? this.bankaAd,
       kasa: kasa ?? this.kasa,
       cekilenTutar: cekilenTutar ?? this.cekilenTutar,

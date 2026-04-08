@@ -141,8 +141,12 @@ class KrediScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          kredi.bankaAd,
+                          kredi.krediAdi.isNotEmpty ? kredi.krediAdi : kredi.bankaAd,
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        Text(
+                          '${kredi.krediId} • ${kredi.bankaAd}',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                         ),
                         Text(
                           '${kredi.taksitTipi} - ${kredi.vadeAy} Ay',
@@ -243,8 +247,8 @@ class KrediScreen extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(kredi.bankaAd, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                                Text('Kredi ID: ${kredi.krediId}', style: TextStyle(color: Colors.grey.shade600)),
+                                Text(kredi.krediAdi.isNotEmpty ? kredi.krediAdi : kredi.bankaAd, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                Text('${kredi.krediId} • ${kredi.bankaAd}', style: TextStyle(color: Colors.grey.shade600)),
                               ],
                             ),
                           ),
@@ -256,7 +260,7 @@ class KrediScreen extends StatelessWidget {
                                 context: context,
                                 builder: (c) => AlertDialog(
                                   title: const Text('Krediyi Sil'),
-                                  content: Text('${kredi.bankaAd} kredisini ve tüm taksit planını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz.'),
+                                  content: Text('${kredi.krediAdi.isNotEmpty ? kredi.krediAdi : kredi.bankaAd} kredisini ve tüm taksit planını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz.'),
                                   actions: [
                                     TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
                                     ElevatedButton(
@@ -412,6 +416,8 @@ class KrediScreen extends StatelessWidget {
   
   void _showAddKrediDialog(BuildContext context) {
     final formKey = GlobalKey<FormState>();
+    String krediId = '';
+    String krediAdi = '';
     String bankaAd = '';
     double cekilenTutar = 0;
     double faizOrani = 0;
@@ -449,7 +455,29 @@ class KrediScreen extends StatelessWidget {
                         
                         TextFormField(
                           decoration: const InputDecoration(
-                            labelText: 'Banka Adı',
+                            labelText: 'Kredi ID *',
+                            prefixIcon: Icon(Icons.tag),
+                            hintText: 'Örn: K-001, TEB-2026',
+                          ),
+                          validator: (value) => value?.trim().isEmpty ?? true ? 'Kredi ID girin' : null,
+                          onSaved: (value) => krediId = value!.trim(),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Kredi Adı *',
+                            prefixIcon: Icon(Icons.label_outline),
+                            hintText: 'Örn: Sera Yatırım Kredisi',
+                          ),
+                          validator: (value) => value?.trim().isEmpty ?? true ? 'Kredi adı girin' : null,
+                          onSaved: (value) => krediAdi = value!.trim(),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        TextFormField(
+                          decoration: const InputDecoration(
+                            labelText: 'Banka Adı *',
                             prefixIcon: Icon(Icons.account_balance),
                           ),
                           validator: (value) => value?.isEmpty ?? true ? 'Banka adı girin' : null,
@@ -574,7 +602,8 @@ class KrediScreen extends StatelessWidget {
                               formKey.currentState!.save();
                               
                               final kredi = Kredi(
-                                krediId: 'K${DateTime.now().millisecondsSinceEpoch}',
+                                krediId: krediId,
+                                krediAdi: krediAdi,
                                 bankaAd: bankaAd,
                                 cekilenTutar: cekilenTutar,
                                 faizOrani: faizOrani,

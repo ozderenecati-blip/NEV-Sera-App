@@ -232,6 +232,7 @@ class DatabaseService {
       CREATE TABLE krediler (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         kredi_id TEXT NOT NULL,
+        kredi_adi TEXT DEFAULT '',
         banka_ad TEXT NOT NULL,
         kasa TEXT,
         cekilen_tutar REAL NOT NULL,

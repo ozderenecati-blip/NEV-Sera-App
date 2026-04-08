@@ -494,7 +494,6 @@ class KrediScreen extends StatelessWidget {
                                 initialDate: baslangicTarihi,
                                 firstDate: DateTime(2020),
                                 lastDate: DateTime(2040),
-                                locale: const Locale('tr', 'TR'),
                               );
                               if (picked != null) {
                                 setModalState(() => baslangicTarihi = picked);

@@ -82,11 +82,13 @@ class _BahceYonetimiScreenState extends State<BahceYonetimiScreen> {
   }
 
   Widget _buildBahceCard(Bahce bahce, int index, bool isDark) {
-    // Tüm sıralardaki cinsleri topla
-    final cinsler = <String>{};
+    // Tüm sıralardaki cinsleri ve adetlerini topla
+    final cinsSaksi = <String, int>{};
     for (final p in bahce.parseller) {
       for (final s in p.siralar) {
-        if (s.cins != null && s.cins!.isNotEmpty) cinsler.add(s.cins!);
+        if (s.cins != null && s.cins!.isNotEmpty) {
+          cinsSaksi[s.cins!] = (cinsSaksi[s.cins!] ?? 0) + s.saksiSayisi;
+        }
       }
     }
 
@@ -208,21 +210,21 @@ class _BahceYonetimiScreenState extends State<BahceYonetimiScreen> {
                   );
                 }),
               ],
-              // Cins etiketleri
-              if (cinsler.isNotEmpty) ...[
+              // Cins dağılımı (adetli)
+              if (cinsSaksi.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 6,
                   runSpacing: 4,
-                  children: cinsler
-                      .map((c) => Container(
+                  children: cinsSaksi.entries
+                      .map((e) => Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: const Color(0xFF059669).withOpacity(0.08),
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: Text('🌱 $c',
+                            child: Text('🌱 ${e.key}: ${e.value}',
                                 style: const TextStyle(
                                     fontSize: 11,
                                     color: Color(0xFF059669),

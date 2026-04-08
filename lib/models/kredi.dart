@@ -130,6 +130,7 @@ class KrediTaksit {
   final double toplamTaksit;
   final double kalanBakiye;
   final bool odendi;
+  final DateTime? odemeTarihi;
 
   KrediTaksit({
     this.id,
@@ -143,6 +144,7 @@ class KrediTaksit {
     required this.toplamTaksit,
     required this.kalanBakiye,
     this.odendi = false,
+    this.odemeTarihi,
   });
 
   Map<String, dynamic> toMap() {
@@ -158,6 +160,7 @@ class KrediTaksit {
       'toplam_taksit': toplamTaksit,
       'kalan_bakiye': kalanBakiye,
       'odendi': odendi,
+      'odeme_tarihi': odemeTarihi?.toIso8601String(),
     };
   }
 
@@ -174,6 +177,37 @@ class KrediTaksit {
       toplamTaksit: (map['toplam_taksit'] ?? 0).toDouble(),
       kalanBakiye: (map['kalan_bakiye'] ?? 0).toDouble(),
       odendi: map['odendi'] == 1 || map['odendi'] == true,
+      odemeTarihi: map['odeme_tarihi'] != null ? DateTime.parse(map['odeme_tarihi']) : null,
+    );
+  }
+
+  KrediTaksit copyWith({
+    int? id,
+    int? krediDbId,
+    int? periyot,
+    DateTime? vadeTarihi,
+    double? anapara,
+    double? faiz,
+    double? bsmv,
+    double? kkdf,
+    double? toplamTaksit,
+    double? kalanBakiye,
+    bool? odendi,
+    DateTime? odemeTarihi,
+  }) {
+    return KrediTaksit(
+      id: id ?? this.id,
+      krediDbId: krediDbId ?? this.krediDbId,
+      periyot: periyot ?? this.periyot,
+      vadeTarihi: vadeTarihi ?? this.vadeTarihi,
+      anapara: anapara ?? this.anapara,
+      faiz: faiz ?? this.faiz,
+      bsmv: bsmv ?? this.bsmv,
+      kkdf: kkdf ?? this.kkdf,
+      toplamTaksit: toplamTaksit ?? this.toplamTaksit,
+      kalanBakiye: kalanBakiye ?? this.kalanBakiye,
+      odendi: odendi ?? this.odendi,
+      odemeTarihi: odemeTarihi ?? this.odemeTarihi,
     );
   }
 }

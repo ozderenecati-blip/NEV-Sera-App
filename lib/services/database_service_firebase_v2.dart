@@ -454,6 +454,19 @@ class DatabaseService {
     }
   }
 
+  Future<void> updateTaksitTarih(int taksitId, DateTime yeniTarih) async {
+    try {
+      final docId = _getDocId('kredi_taksitleri', taksitId);
+      if (docId == null) return;
+      
+      await _db.collection('kredi_taksitleri').doc(docId).update({
+        'vade_tarihi': yeniTarih.toIso8601String(),
+      });
+    } catch (e) {
+      print('updateTaksitTarih error: \$e');
+    }
+  }
+
   Future<Map<String, double>> getKrediOzet() async {
     try {
       final krediler = await getKrediler();

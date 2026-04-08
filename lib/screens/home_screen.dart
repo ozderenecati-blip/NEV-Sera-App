@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/yaklasan_odeme.dart';
+import '../models/kredi.dart';
 import '../models/kasa_hareketi.dart';
 import '../widgets/modern_widgets.dart';
 import 'kasa_screen.dart';
@@ -308,7 +309,9 @@ class DashboardTab extends StatelessWidget {
     NumberFormat fmt,
   ) {
     final bekleyenler = provider.bekleyenOdemeler;
-    final yakinOdemeler = bekleyenler; // Tüm bekleyen ödemeleri göster
+    final yakinOdemeler = bekleyenler;
+    final krediTaksitleri = provider.yaklasanKrediTaksitleri;
+    final toplamItem = yakinOdemeler.length + krediTaksitleri.length;
 
     return Card(
       child: Padding(
@@ -333,7 +336,7 @@ class DashboardTab extends StatelessWidget {
                 ),
               ],
             ),
-            if (yakinOdemeler.isEmpty)
+            if (toplamItem == 0)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Center(
@@ -343,10 +346,78 @@ class DashboardTab extends StatelessWidget {
                   ),
                 ),
               )
-            else
+            else ...[
               ...yakinOdemeler
                   .take(5)
                   .map((odeme) => _buildOdemeItem(context, odeme, fmt)),
+              if (krediTaksitleri.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text('Kredi Taksitleri', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.blue.shade700)),
+                const SizedBox(height: 4),
+                ...krediTaksitleri.take(5).map((item) {
+                  final kredi = item['kredi'] as Kredi;
+                  final taksit = item['taksit'] as KrediTaksit;
+                  final gecikmisMi = taksit.vadeTarihi.isBefore(DateTime.now());
+                  final gun = taksit.vadeTarihi.difference(DateTime.now()).inDays;
+                  Color bgColor;
+                  Color textColor;
+                  String durum;
+                  if (gecikmisMi) {
+                    bgColor = Colors.red.shade100;
+                    textColor = Colors.red.shade900;
+                    durum = '${gun.abs()} gün gecikmiş';
+                  } else if (gun == 0) {
+                    bgColor = Colors.orange.shade100;
+                    textColor = Colors.orange.shade900;
+                    durum = 'Bugün';
+                  } else if (gun <= 7) {
+                    bgColor = Colors.yellow.shade100;
+                    textColor = Colors.orange.shade800;
+                    durum = '$gun gün kaldı';
+                  } else {
+                    bgColor = Colors.blue.shade50;
+                    textColor = Colors.blue.shade800;
+                    durum = '$gun gün kaldı';
+                  }
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${kredi.krediAdi.isNotEmpty ? kredi.krediAdi : kredi.bankaAd} - Taksit ${taksit.periyot}',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 13),
+                              ),
+                              Text(
+                                '${DateFormat('dd MMM yyyy', 'tr_TR').format(taksit.vadeTarihi)} • $durum',
+                                style: TextStyle(fontSize: 12, color: textColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          fmt.format(taksit.toplamTaksit),
+                          style: TextStyle(fontWeight: FontWeight.bold, color: textColor, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (krediTaksitleri.length > 5)
+                  TextButton(
+                    onPressed: () {},
+                    child: Text('Tüm Taksitleri Gör (${krediTaksitleri.length})'),
+                  ),
+              ],
+            ],
             if (bekleyenler.length > 5)
               TextButton(
                 onPressed: () => _showAllOdemeler(context, bekleyenler, fmt),

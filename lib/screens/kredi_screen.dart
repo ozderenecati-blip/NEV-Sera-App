@@ -323,18 +323,87 @@ class KrediScreen extends StatelessWidget {
                           itemCount: kredi.taksitler.length,
                           itemBuilder: (context, index) {
                             final taksit = kredi.taksitler[index];
+                            final bool gecikmisMi = !taksit.odendi && taksit.vadeTarihi.isBefore(DateTime.now());
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
+                              color: taksit.odendi
+                                  ? Colors.green.shade50
+                                  : gecikmisMi
+                                      ? Colors.red.shade50
+                                      : null,
                               child: ExpansionTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: Colors.blue.shade100,
-                                  child: Text(
-                                    '${taksit.periyot}',
-                                    style: TextStyle(color: Colors.blue.shade700, fontWeight: FontWeight.bold),
+                                  backgroundColor: taksit.odendi
+                                      ? Colors.green.shade100
+                                      : gecikmisMi
+                                          ? Colors.red.shade100
+                                          : Colors.blue.shade100,
+                                  child: taksit.odendi
+                                      ? Icon(Icons.check, color: Colors.green.shade700)
+                                      : Text(
+                                          '${taksit.periyot}',
+                                          style: TextStyle(
+                                            color: gecikmisMi ? Colors.red.shade700 : Colors.blue.shade700,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                ),
+                                title: Text(
+                                  currencyFormat.format(taksit.toplamTaksit),
+                                  style: TextStyle(
+                                    decoration: taksit.odendi ? TextDecoration.lineThrough : null,
+                                    color: taksit.odendi ? Colors.grey : null,
                                   ),
                                 ),
-                                title: Text(currencyFormat.format(taksit.toplamTaksit)),
-                                subtitle: Text(DateFormat('dd MMM yyyy', 'tr_TR').format(taksit.vadeTarihi)),
+                                subtitle: Row(
+                                  children: [
+                                    Text(
+                                      DateFormat('dd MMM yyyy', 'tr_TR').format(taksit.vadeTarihi),
+                                      style: TextStyle(
+                                        color: gecikmisMi ? Colors.red : null,
+                                        fontWeight: gecikmisMi ? FontWeight.bold : null,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    InkWell(
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: taksit.vadeTarihi,
+                                          firstDate: DateTime(2020),
+                                          lastDate: DateTime(2040),
+                                        );
+                                        if (picked != null && context.mounted) {
+                                          final provider = Provider.of<AppProvider>(context, listen: false);
+                                          await provider.updateTaksitTarih(kredi.id!, taksit.id!, picked);
+                                        }
+                                      },
+                                      child: Icon(Icons.edit_calendar, size: 18, color: Colors.blue.shade400),
+                                    ),
+                                    if (taksit.odendi) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.shade100,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text('Ödendi', style: TextStyle(color: Colors.green.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                    if (gecikmisMi) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade100,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text('Gecikmiş', style: TextStyle(color: Colors.red.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                                 trailing: Text(
                                   'Kalan: ${currencyFormat.format(taksit.kalanBakiye)}',
                                   style: const TextStyle(fontSize: 12),
@@ -387,6 +456,61 @@ class KrediScreen extends StatelessWidget {
                                             Text(currencyFormat.format(taksit.toplamTaksit), style: const TextStyle(fontWeight: FontWeight.bold)),
                                           ],
                                         ),
+                                        if (!taksit.odendi) ...[
+                                          const SizedBox(height: 12),
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              onPressed: () async {
+                                                final provider = Provider.of<AppProvider>(context, listen: false);
+                                                final confirm = await showDialog<bool>(
+                                                  context: context,
+                                                  builder: (ctx) => AlertDialog(
+                                                    title: const Text('Taksit Öde'),
+                                                    content: Text('Taksit ${taksit.periyot} - ${currencyFormat.format(taksit.toplamTaksit)} ödensin mi?'),
+                                                    actions: [
+                                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('İptal')),
+                                                      ElevatedButton(
+                                                        onPressed: () => Navigator.pop(ctx, true),
+                                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                                                        child: const Text('Öde', style: TextStyle(color: Colors.white)),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                                if (confirm == true) {
+                                                  await provider.taksitOde(kredi.id!, taksit.id!, DateTime.now());
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Taksit ödendi ✓'), backgroundColor: Colors.green),
+                                                    );
+                                                    Navigator.pop(context);
+                                                  }
+                                                }
+                                              },
+                                              icon: const Icon(Icons.payment, color: Colors.white),
+                                              label: const Text('Taksiti Öde', style: TextStyle(color: Colors.white)),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.green,
+                                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        if (taksit.odendi && taksit.odemeTarihi != null) ...[
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.check_circle, color: Colors.green.shade600, size: 16),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Ödenme Tarihi: ${DateFormat('dd MMM yyyy', 'tr_TR').format(taksit.odemeTarihi!)}',
+                                                style: TextStyle(color: Colors.green.shade700, fontSize: 13),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

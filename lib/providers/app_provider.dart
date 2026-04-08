@@ -407,7 +407,39 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  // ==================== ORTAKLAR ====================
+  Future<bool> updateTaksitTarih(int krediId, int taksitId, DateTime yeniTarih) async {
+    try {
+      await _db.updateTaksitTarih(taksitId, yeniTarih);
+      _krediler = await _db.getKrediler();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Taksit tarihi güncellenirken hata: \$e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Kredi taksitlerinden yaklaşan 60 gün içindeki ödenmemiş taksitleri döndürür
+  List<Map<String, dynamic>> get yaklasanKrediTaksitleri {
+    final now = DateTime.now();
+    final limit = now.add(const Duration(days: 60));
+    final List<Map<String, dynamic>> result = [];
+    
+    for (var kredi in _krediler) {
+      for (var taksit in kredi.taksitler) {
+        if (!taksit.odendi && taksit.vadeTarihi.isBefore(limit)) {
+          result.add({
+            'kredi': kredi,
+            'taksit': taksit,
+          });
+        }
+      }
+    }
+    result.sort((a, b) => (a['taksit'] as KrediTaksit).vadeTarihi.compareTo((b['taksit'] as KrediTaksit).vadeTarihi));
+    return result;
+  }
+
 
   Future<void> loadOrtaklar() async {
     try {

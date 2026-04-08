@@ -455,4 +455,24 @@ class OperasyonService {
       return null;
     }
   }
+
+  Future<bool> deleteReceteGecmisi(String id) async {
+    try {
+      await _receteGecmisiRef.doc(id).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteReceteGecmisi error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteKatlamaKaydi(String id) async {
+    try {
+      await _katlamaRef.doc(id).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteKatlamaKaydi error: $e');
+      return false;
+    }
+  }
 }

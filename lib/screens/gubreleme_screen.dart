@@ -446,6 +446,14 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                       Text('${k.yapanKullaniciAdi} • ${_dateFormat.format(k.tarih)}',
                           style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                     ])),
+                    if (_canWrite)
+                      IconButton(
+                        onPressed: () => _silKatlamaKaydi(k),
+                        icon: const Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                        tooltip: 'Sil',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      ),
                   ]),
                   if (k.kullanilanGubreler.isNotEmpty) ...[
                     const SizedBox(height: 10),
@@ -866,6 +874,16 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                               const SizedBox(width: 8),
                               Expanded(child: Text(g.degistirenKullaniciAdi, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))),
                               Text('${g.recete.length} gübre', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                              if (_canWrite) ...[                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: () => _silReceteGecmisi(ctx, g, tank),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(4),
+                                    child: Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                  ),
+                                ),
+                              ],
                             ]),
                             if (g.not.isNotEmpty) ...[
                               const SizedBox(height: 6),
@@ -1123,6 +1141,64 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
       ],
     ));
     if (onay == true) { await _service.deleteTank(tank.id!); if (sheetCtx.mounted) Navigator.pop(sheetCtx); _refresh(); }
+  }
+
+  // ═══════════════ SİLME İŞLEMLERİ ═══════════════
+
+  Future<void> _silKatlamaKaydi(KatlamaKaydi kayit) async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Katlama Kaydını Sil'),
+        content: Text('Tank ${kayit.tankAdi} — ${kayit.katlama}x katlama kaydı silinecek.\n\nBu işlem geri alınamaz. Emin misiniz?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (onay == true && kayit.id != null) {
+      await _service.deleteKatlamaKaydi(kayit.id!);
+      setState(() {}); // FutureBuilder yeniden çalışsın
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Katlama kaydı silindi ✓')),
+        );
+      }
+    }
+  }
+
+  Future<void> _silReceteGecmisi(BuildContext sheetCtx, ReceteGecmisi gecmis, GubreTank tank) async {
+    final onay = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Reçete Geçmişini Sil'),
+        content: Text('${_dateFormatShort.format(gecmis.tarih)} tarihli reçete kaydı silinecek.\n\nBu işlem geri alınamaz. Emin misiniz?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(c, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (onay == true && gecmis.id != null) {
+      await _service.deleteReceteGecmisi(gecmis.id!);
+      if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+      // Yeniden aç
+      _showReceteGecmisiDialog(tank);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reçete geçmişi silindi ✓')),
+        );
+      }
+    }
   }
 
   // ═══════════════ YARDIMCI ═══════════════

@@ -421,11 +421,11 @@ class DatabaseService {
   // ==================== SETTINGS ====================
   Future<int> insertSetting(AppSettings s) async {
     try {
-      final docRef = await _db.collection('settings').add(s.toMap());
+      final docRef = await _db.collection('settings').add(s.toFirestoreMap());
       return _getIntId('settings', docRef.id);
     } catch (e) {
       print('insertSetting error: $e');
-      return -1;
+      rethrow;
     }
   }
 
@@ -458,7 +458,7 @@ class DatabaseService {
       final docId = _getDocId('settings', s.id!);
       if (docId == null) return 0;
       
-      await _db.collection('settings').doc(docId).update(s.toMap());
+      await _db.collection('settings').doc(docId).update(s.toFirestoreMap());
       return 1;
     } catch (e) {
       print('updateSetting error: $e');

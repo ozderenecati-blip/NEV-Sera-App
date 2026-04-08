@@ -35,12 +35,23 @@ class AppSettings {
     };
   }
 
+  /// Firestore için id hariç, aktif boolean olarak
+  Map<String, dynamic> toFirestoreMap() {
+    return {
+      'tip': tip,
+      'deger': deger,
+      'aktif': aktif,
+      'ortak_id': ortakId,
+      'para_birimi': paraBirimi,
+    };
+  }
+
   factory AppSettings.fromMap(Map<String, dynamic> map) {
     return AppSettings(
       id: map['id'],
       tip: map['tip'] ?? '',
       deger: map['deger'] ?? '',
-      aktif: map['aktif'] == 1 || map['aktif'] == true,
+      aktif: map['aktif'] == 1 || map['aktif'] == true || map['aktif'] == 1.0,
       ortakId: map['ortak_id'],
       paraBirimi: map['para_birimi'],
     );

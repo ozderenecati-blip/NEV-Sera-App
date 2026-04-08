@@ -319,10 +319,17 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     ortakId: selectedOrtakId,
                     paraBirimi: selectedParaBirimi,
                   );
-                  await provider.addSettingFull(setting);
+                  final success = await provider.addSettingFull(setting);
                   if (dialogContext.mounted) {
                     Navigator.of(dialogContext).pop();
-                    setState(() {});
+                  }
+                  if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Kasa eklenirken hata: ${provider.error}'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
                   }
                 }
               },

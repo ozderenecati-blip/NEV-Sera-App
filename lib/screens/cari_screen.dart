@@ -58,8 +58,8 @@ class _CariScreenState extends State<CariScreen> {
           double toplamBorcKalan = 0;
           double toplamAlacakKalan = 0;
           for (final c in cariler) {
-            if (c.kalanBorc > 0) toplamBorcKalan += c.kalanBorc;
-            if (c.kalanAlacak > 0) toplamAlacakKalan += c.kalanAlacak;
+            if (c.netBakiye > 0) toplamBorcKalan += c.netBakiye;
+            if (c.netBakiye < 0) toplamAlacakKalan += c.netBakiye.abs();
           }
 
           return RefreshIndicator(
@@ -130,11 +130,11 @@ class _CariScreenState extends State<CariScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: cari.kalanBorc > 0 ? Colors.red[100] : Colors.green[100],
+          backgroundColor: cari.netBakiye > 0 ? Colors.red[100] : Colors.green[100],
           child: Text(
             cari.firmaAdi.substring(0, 1).toUpperCase(),
             style: TextStyle(
-              color: cari.kalanBorc > 0 ? Colors.red[800] : Colors.green[800],
+              color: cari.netBakiye > 0 ? Colors.red[800] : Colors.green[800],
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -142,16 +142,16 @@ class _CariScreenState extends State<CariScreen> {
         title: Text(cari.firmaAdi, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Row(
           children: [
-            if (cari.kalanBorc > 0) ...[
+            if (cari.netBakiye > 0) ...[
               Icon(Icons.arrow_upward, size: 14, color: Colors.red[400]),
-              Text(' Borcumuz: ${fmt.format(cari.kalanBorc)}', style: TextStyle(fontSize: 12, color: Colors.red[600])),
+              Text(' Borcumuz: ${fmt.format(cari.netBakiye)}', style: TextStyle(fontSize: 12, color: Colors.red[600])),
             ],
-            if (cari.kalanBorc > 0 && cari.kalanAlacak > 0) const Text('  •  ', style: TextStyle(fontSize: 12)),
-            if (cari.kalanAlacak > 0) ...[
+            
+            if (cari.netBakiye < 0) ...[
               Icon(Icons.arrow_downward, size: 14, color: Colors.green[400]),
-              Text(' Alacağımız: ${fmt.format(cari.kalanAlacak)}', style: TextStyle(fontSize: 12, color: Colors.green[600])),
+              Text(' Alacağımız: ${fmt.format(cari.netBakiye.abs())}', style: TextStyle(fontSize: 12, color: Colors.green[600])),
             ],
-            if (cari.kalanBorc == 0 && cari.kalanAlacak == 0)
+            if (cari.netBakiye == 0)
               Text('Bakiye temiz ✓', style: TextStyle(fontSize: 12, color: Colors.green[600])),
           ],
         ),

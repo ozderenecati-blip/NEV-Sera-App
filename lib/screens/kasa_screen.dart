@@ -131,13 +131,13 @@ class _KasaScreenState extends State<KasaScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  ThemeProvider.primaryColor.withOpacity(0.1),
-                  ThemeProvider.primaryLight.withOpacity(0.1),
+                  ThemeProvider.primaryColor.withValues(alpha: 0.1),
+                  ThemeProvider.primaryLight.withValues(alpha: 0.1),
                 ],
               ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: ThemeProvider.primaryColor.withOpacity(0.2),
+                color: ThemeProvider.primaryColor.withValues(alpha: 0.2),
               ),
             ),
             child: Row(
@@ -155,7 +155,7 @@ class _KasaScreenState extends State<KasaScreen> {
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   width: 1,
                   height: 16,
-                  color: ThemeProvider.primaryColor.withOpacity(0.3),
+                  color: ThemeProvider.primaryColor.withValues(alpha: 0.3),
                 ),
                 Text(
                   '\$${_usdTryRate.toStringAsFixed(2)}',
@@ -296,7 +296,7 @@ class _KasaScreenState extends State<KasaScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: _filterKasa,
+                  value: _filterKasa,
                   isDense: true,
                   decoration: const InputDecoration(
                       labelText: 'Kasa',
@@ -318,7 +318,7 @@ class _KasaScreenState extends State<KasaScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _filterIslemTipi,
+                    value: _filterIslemTipi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Tip',
@@ -343,7 +343,7 @@ class _KasaScreenState extends State<KasaScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _filterIslemKaynagi,
+                    value: _filterIslemKaynagi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Kaynak',
@@ -391,7 +391,7 @@ class _KasaScreenState extends State<KasaScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _filterParaBirimi,
+                    value: _filterParaBirimi,
                     isDense: true,
                     decoration: const InputDecoration(
                       labelText: 'Para Birimi',
@@ -1156,7 +1156,7 @@ class _KasaScreenState extends State<KasaScreen> {
     if (hareket != null) {
       if (hareket.islemKaynagi == 'doviz_bozdurma') {
         islemModu = 'doviz';
-      } else if (hareket.islemKaynagi == 'transfer') {
+      } else if (hareket.islemKaynagi == 'kasa_transfer' || hareket.islemKaynagi == 'transfer') {
         islemModu = 'transfer';
       } else if (hareket.islemTipi == 'Giriş') {
         islemModu = 'giris';
@@ -1191,6 +1191,7 @@ class _KasaScreenState extends State<KasaScreen> {
     bool islemUcretiAktif = false;
     String? fisUrl = hareket?.fisUrl; // Fiş görseli URL'si
     bool fisYukleniyor = false;
+    bool isSaving = false; // Çift tıklama koruması
 
     showModalBottomSheet(
       context: context,
@@ -1421,7 +1422,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                     onTap:
                                         () => setModalState(() {
                                           islemModu = 'transfer';
-                                          islemKaynagi = 'transfer';
+                                          islemKaynagi = 'kasa_transfer';
                                         }),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
@@ -1699,7 +1700,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
-                                        initialValue: selectedKasa,
+                                        value: selectedKasa,
                                         decoration: const InputDecoration(
                                           labelText: 'Kaynak Kasa *',
                                           border: OutlineInputBorder(),
@@ -1730,7 +1731,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                     ),
                                     Expanded(
                                       child: DropdownButtonFormField<String>(
-                                        initialValue: hedefKasa,
+                                        value: hedefKasa,
                                         decoration: const InputDecoration(
                                           labelText: 'Hedef Kasa *',
                                           border: OutlineInputBorder(),
@@ -1928,20 +1929,45 @@ class _KasaScreenState extends State<KasaScreen> {
                               ),
                             ],
 
-                            // Transfer modunda tutar
+                            // Transfer modunda para birimi ve tutar
                             if (islemModu == 'transfer') ...[
-                              TextField(
-                                controller: tutarController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 110,
+                                    child: DropdownButtonFormField<String>(
+                                      value: selectedParaBirimi,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Birim',
+                                        border: OutlineInputBorder(),
+                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                      ),
+                                      isExpanded: true,
+                                      items: const [
+                                        DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
+                                        DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                                        DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
+                                      ],
+                                      onChanged: (v) => setModalState(() => selectedParaBirimi = v!),
                                     ),
-                                decoration: const InputDecoration(
-                                  labelText: 'Transfer Tutarı *',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.attach_money),
-                                ),
-                                onChanged: (_) => setModalState(() {}),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: tutarController,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Transfer Tutarı *',
+                                        border: OutlineInputBorder(),
+                                        prefixIcon: Icon(Icons.attach_money),
+                                      ),
+                                      onChanged: (_) => setModalState(() {}),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
 
@@ -2004,7 +2030,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                       ),
                                     )
                                   : DropdownButtonFormField<String>(
-                                      initialValue: selectedKasa,
+                                      value: selectedKasa,
                                       decoration: const InputDecoration(
                                         labelText: 'Kasa *',
                                         border: OutlineInputBorder(),
@@ -2299,8 +2325,10 @@ class _KasaScreenState extends State<KasaScreen> {
                               width: double.infinity,
                               height: 50,
                               child: FilledButton(
-                                onPressed:
-                                    () => _handleSaveIslem(
+                                onPressed: isSaving ? null : () async {
+                                  setModalState(() => isSaving = true);
+                                  try {
+                                    await _handleSaveIslem(
                                       ctx: ctx,
                                       provider: provider,
                                       isEdit: isEdit,
@@ -2325,8 +2353,14 @@ class _KasaScreenState extends State<KasaScreen> {
                                       selectedDate: selectedDate,
                                       islemUcretiAktif: islemUcretiAktif,
                                       fisUrl: fisUrl,
-                                    ),
-                                child: Text(isEdit ? 'Güncelle' : 'Kaydet'),
+                                    );
+                                  } finally {
+                                    if (ctx.mounted) setModalState(() => isSaving = false);
+                                  }
+                                },
+                                child: isSaving
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                    : Text(isEdit ? 'Güncelle' : 'Kaydet'),
                               ),
                             ),
 
@@ -2443,8 +2477,10 @@ class _KasaScreenState extends State<KasaScreen> {
             notlarController.text.trim().isEmpty
                 ? null
                 : notlarController.text.trim(),
-        paraBirimi: 'TL',
-        islemKaynagi: 'transfer',
+        paraBirimi: selectedParaBirimi,
+        dovizKuru: selectedParaBirimi != 'TL' ? (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        tlKarsiligi: selectedParaBirimi != 'TL' ? tutar * (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        islemKaynagi: 'kasa_transfer',
       );
       await provider.addKasaHareketi(cikis);
 
@@ -2460,8 +2496,10 @@ class _KasaScreenState extends State<KasaScreen> {
             notlarController.text.trim().isEmpty
                 ? null
                 : notlarController.text.trim(),
-        paraBirimi: 'TL',
-        islemKaynagi: 'transfer',
+        paraBirimi: selectedParaBirimi,
+        dovizKuru: selectedParaBirimi != 'TL' ? (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        tlKarsiligi: selectedParaBirimi != 'TL' ? tutar * (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        islemKaynagi: 'kasa_transfer',
       );
       await provider.addKasaHareketi(giris);
 

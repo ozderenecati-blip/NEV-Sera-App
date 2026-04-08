@@ -248,6 +248,36 @@ class KrediScreen extends StatelessWidget {
                               ],
                             ),
                           ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            tooltip: 'Krediyi Sil',
+                            onPressed: () async {
+                              final onay = await showDialog<bool>(
+                                context: context,
+                                builder: (c) => AlertDialog(
+                                  title: const Text('Krediyi Sil'),
+                                  content: Text('${kredi.bankaAd} kredisini ve tüm taksit planını silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+                                    ElevatedButton(
+                                      onPressed: () => Navigator.pop(c, true),
+                                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                                      child: const Text('Sil'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (onay == true && kredi.id != null) {
+                                final success = await context.read<AppProvider>().deleteKredi(kredi.id!);
+                                if (success && context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Kredi silindi'), backgroundColor: Colors.green),
+                                  );
+                                }
+                              }
+                            },
+                          ),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -473,7 +503,7 @@ class KrediScreen extends StatelessWidget {
                         
                         // Ödeme Sıklığı
                         DropdownButtonFormField<int>(
-                          initialValue: odemeSikligiAy,
+                          value: odemeSikligiAy,
                           decoration: const InputDecoration(
                             labelText: 'Ödeme Sıklığı',
                             prefixIcon: Icon(Icons.repeat),
@@ -526,7 +556,7 @@ class KrediScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                         
                         DropdownButtonFormField<String>(
-                          initialValue: taksitTipi,
+                          value: taksitTipi,
                           decoration: const InputDecoration(
                             labelText: 'Taksit Tipi',
                             prefixIcon: Icon(Icons.payment),

@@ -49,19 +49,19 @@ class GlassCard extends StatelessWidget {
                   gradient: gradient,
                   color: gradient == null
                       ? (color ?? (isDark 
-                          ? Colors.white.withOpacity(0.1) 
-                          : Colors.white.withOpacity(0.8)))
+                          ? Colors.white.withValues(alpha: 0.1) 
+                          : Colors.white.withValues(alpha: 0.8)))
                       : null,
                   borderRadius: BorderRadius.circular(borderRadius),
                   border: Border.all(
                     color: isDark 
-                        ? Colors.white.withOpacity(0.1) 
-                        : Colors.white.withOpacity(0.5),
+                        ? Colors.white.withValues(alpha: 0.1) 
+                        : Colors.white.withValues(alpha: 0.5),
                     width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -105,7 +105,7 @@ class GradientCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(borderRadius),
         boxShadow: [
           BoxShadow(
-            color: (gradient.colors.first).withOpacity(0.4),
+            color: (gradient.colors.first).withValues(alpha: 0.4),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -270,7 +270,7 @@ class EmptyStateWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: ThemeProvider.primaryColor.withOpacity(0.1),
+                color: ThemeProvider.primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -427,7 +427,7 @@ class _AnimatedFABState extends State<AnimatedFAB>
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: ThemeProvider.primaryColor.withOpacity(0.3 + (_controller.value * 0.2)),
+                color: ThemeProvider.primaryColor.withValues(alpha: 0.3 + (_controller.value * 0.2)),
                 blurRadius: 15 + (_controller.value * 10),
                 spreadRadius: 2,
                 offset: const Offset(0, 4),
@@ -480,8 +480,8 @@ class SummaryCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: Colors.white, size: 24),
               ),
@@ -489,7 +489,7 @@ class SummaryCard extends StatelessWidget {
               if (onTap != null)
                 Icon(
                   Icons.arrow_forward_ios,
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                   size: 16,
                 ),
             ],
@@ -516,7 +516,7 @@ class SummaryCard extends StatelessWidget {
             Text(
               subtitle!,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
+                color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 12,
               ),
             ),
@@ -643,7 +643,7 @@ class ModernSearchBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

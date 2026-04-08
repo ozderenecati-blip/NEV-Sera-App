@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 20,
               offset: const Offset(0, 5),
             ),
@@ -80,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             height: 70,
             backgroundColor: Colors.transparent,
-            indicatorColor: ThemeProvider.primaryColor.withOpacity(0.15),
+            indicatorColor: ThemeProvider.primaryColor.withValues(alpha: 0.15),
             destinations: [
               NavigationDestination(
                 icon: const Icon(Icons.dashboard_outlined, size: 24),
@@ -100,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: ThemeProvider.primaryColor.withOpacity(0.4),
+                        color: ThemeProvider.primaryColor.withValues(alpha: 0.4),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: ThemeProvider.primaryColor.withOpacity(0.5),
+                        color: ThemeProvider.primaryColor.withValues(alpha: 0.5),
                         blurRadius: 15,
                         offset: const Offset(0, 4),
                       ),
@@ -160,7 +160,7 @@ class DashboardTab extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: ThemeProvider.primaryColor.withOpacity(0.1),
+                color: ThemeProvider.primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -377,7 +377,7 @@ class DashboardTab extends StatelessWidget {
                     odeme.aciklama!,
                     style: TextStyle(
                       fontSize: 13,
-                      color: textColor.withOpacity(0.8),
+                      color: textColor.withValues(alpha: 0.8),
                     ),
                   ),
                 Text(

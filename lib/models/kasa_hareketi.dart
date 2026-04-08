@@ -79,21 +79,23 @@ class KasaHareketi {
     );
   }
 
+  static const _sentinel = Object();
+
   KasaHareketi copyWith({
     int? id,
     DateTime? tarih,
     String? aciklama,
     String? islemTipi,
     double? tutar,
-    String? odemeBicimi,
-    String? kasa,
-    String? notlar,
+    Object? odemeBicimi = _sentinel,
+    Object? kasa = _sentinel,
+    Object? notlar = _sentinel,
     String? paraBirimi,
-    double? dovizKuru,
-    double? tlKarsiligi,
+    Object? dovizKuru = _sentinel,
+    Object? tlKarsiligi = _sentinel,
     String? islemKaynagi,
-    int? iliskiliId,
-    String? fisUrl,
+    Object? iliskiliId = _sentinel,
+    Object? fisUrl = _sentinel,
   }) {
     return KasaHareketi(
       id: id ?? this.id,
@@ -101,15 +103,15 @@ class KasaHareketi {
       aciklama: aciklama ?? this.aciklama,
       islemTipi: islemTipi ?? this.islemTipi,
       tutar: tutar ?? this.tutar,
-      odemeBicimi: odemeBicimi ?? this.odemeBicimi,
-      kasa: kasa ?? this.kasa,
-      notlar: notlar ?? this.notlar,
+      odemeBicimi: odemeBicimi == _sentinel ? this.odemeBicimi : odemeBicimi as String?,
+      kasa: kasa == _sentinel ? this.kasa : kasa as String?,
+      notlar: notlar == _sentinel ? this.notlar : notlar as String?,
       paraBirimi: paraBirimi ?? this.paraBirimi,
-      dovizKuru: dovizKuru ?? this.dovizKuru,
-      tlKarsiligi: tlKarsiligi ?? this.tlKarsiligi,
+      dovizKuru: dovizKuru == _sentinel ? this.dovizKuru : dovizKuru as double?,
+      tlKarsiligi: tlKarsiligi == _sentinel ? this.tlKarsiligi : tlKarsiligi as double?,
       islemKaynagi: islemKaynagi ?? this.islemKaynagi,
-      iliskiliId: iliskiliId ?? this.iliskiliId,
-      fisUrl: fisUrl ?? this.fisUrl,
+      iliskiliId: iliskiliId == _sentinel ? this.iliskiliId : iliskiliId as int?,
+      fisUrl: fisUrl == _sentinel ? this.fisUrl : fisUrl as String?,
     );
   }
   
@@ -121,6 +123,7 @@ class KasaHareketi {
       case 'resmilestirme': return '📄 G. Pusulası';
       case 'gider_pusulasi_vergi': return '🏛️ G.P. Vergisi';
       case 'doviz_bozdurma': return '💱 Döviz Bozd.';
+      case 'kasa_transfer': return '🔄 Transfer';
       case 'islem_ucreti': return '🧾 İşlem Ücreti';
       default: return '💰 Kasa';
     }

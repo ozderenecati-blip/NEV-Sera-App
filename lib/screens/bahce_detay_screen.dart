@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -561,11 +562,13 @@ class _SiraDuzenleScreen extends StatefulWidget {
   State<_SiraDuzenleScreen> createState() => _SiraDuzenleScreenState();
 }
 
-class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
+class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen>
+    with SingleTickerProviderStateMixin {
   late Bahce _bahce;
   late List<_SiraForm> _formlar;
   bool _isSaving = false;
   bool _hasChanges = false;
+  late TabController _tabCtrl;
 
   // Toplu atama
   final _topluMetreCtrl = TextEditingController();
@@ -576,6 +579,7 @@ class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
   void initState() {
     super.initState();
     _bahce = widget.bahce;
+    _tabCtrl = TabController(length: 2, vsync: this);
     _initForm();
   }
 
@@ -595,6 +599,7 @@ class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
     _topluMetreCtrl.dispose();
     _topluSaksiCtrl.dispose();
     _topluCinsCtrl.dispose();
@@ -850,13 +855,11 @@ class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
           backgroundColor: const Color(0xFF059669),
           foregroundColor: Colors.white,
           actions: [
-            // Toplu atama butonu
             IconButton(
               onPressed: _topluAtama,
               icon: const Icon(Icons.auto_fix_high),
               tooltip: 'Toplu Atama',
             ),
-            // Kaydet butonu
             IconButton(
               onPressed: _isSaving ? null : _kaydet,
               icon: _isSaving
@@ -870,106 +873,32 @@ class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
               tooltip: 'Kaydet',
             ),
           ],
+          bottom: TabBar(
+            controller: _tabCtrl,
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            tabs: const [
+              Tab(icon: Icon(Icons.table_chart, size: 18), text: 'Tablo'),
+              Tab(icon: Icon(Icons.bar_chart, size: 18), text: 'Görsel'),
+            ],
+          ),
         ),
-        body: Column(
+        body: TabBarView(
+          controller: _tabCtrl,
           children: [
-            // Özet bar
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: isDark
-                  ? Colors.grey.shade900
-                  : const Color(0xFF059669).withOpacity(0.05),
-              child: Row(
-                children: [
-                  _summaryItem(Icons.view_column, '${_formlar.length}',
-                      'Sıra'),
-                  const SizedBox(width: 20),
-                  _summaryItem(
-                    Icons.local_florist,
-                    _formlar
-                        .fold<int>(
-                            0,
-                            (s, f) =>
-                                s +
-                                (int.tryParse(f.saksiCtrl.text) ?? 0))
-                        .toString(),
-                    'Saksı',
-                  ),
-                  const SizedBox(width: 20),
-                  _summaryItem(
-                    Icons.straighten,
-                    _formlar
-                        .fold<double>(
-                            0,
-                            (s, f) =>
-                                s +
-                                (double.tryParse(f.metreCtrl.text) ??
-                                    0))
-                        .toStringAsFixed(0),
-                    'Metre',
-                  ),
-                ],
-              ),
-            ),
-
-            // Başlık satırı
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
-              child: const Row(
-                children: [
-                  SizedBox(
-                      width: 36,
-                      child: Text('Sıra',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12))),
-                  SizedBox(width: 8),
-                  SizedBox(
-                      width: 70,
-                      child: Text('Metre',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12))),
-                  SizedBox(width: 8),
-                  SizedBox(
-                      width: 70,
-                      child: Text('Saksı',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12))),
-                  SizedBox(width: 8),
-                  Expanded(
-                      child: Text('Cins',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12))),
-                ],
-              ),
-            ),
-
-            // Sıra listesi
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 80),
-                itemCount: _formlar.length,
-                itemBuilder: (context, idx) =>
-                    _buildSiraRow(idx, isDark),
-              ),
-            ),
+            // ── Sekme 1: Tablo ──
+            _buildTabloView(isDark),
+            // ── Sekme 2: Görsel ──
+            _buildGorselView(isDark),
           ],
         ),
-        // Alt kaydet butonu
         bottomSheet: _hasChanges
             ? SafeArea(
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  color: isDark
-                      ? Colors.grey.shade900
-                      : Colors.white,
+                  color: isDark ? Colors.grey.shade900 : Colors.white,
                   child: ElevatedButton.icon(
                     onPressed: _isSaving ? null : _kaydet,
                     icon: _isSaving
@@ -991,6 +920,526 @@ class _SiraDuzenleScreenState extends State<_SiraDuzenleScreen> {
               )
             : null,
       ),
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  //  TABLO SEKMESİ (mevcut)
+  // ═══════════════════════════════════════════
+
+  Widget _buildTabloView(bool isDark) {
+    return Column(
+      children: [
+        // Özet bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: isDark
+              ? Colors.grey.shade900
+              : const Color(0xFF059669).withOpacity(0.05),
+          child: Row(
+            children: [
+              _summaryItem(
+                  Icons.view_column, '${_formlar.length}', 'Sıra'),
+              const SizedBox(width: 20),
+              _summaryItem(
+                Icons.local_florist,
+                _formlar
+                    .fold<int>(
+                        0,
+                        (s, f) =>
+                            s + (int.tryParse(f.saksiCtrl.text) ?? 0))
+                    .toString(),
+                'Saksı',
+              ),
+              const SizedBox(width: 20),
+              _summaryItem(
+                Icons.straighten,
+                _formlar
+                    .fold<double>(
+                        0,
+                        (s, f) =>
+                            s +
+                            (double.tryParse(f.metreCtrl.text) ?? 0))
+                    .toStringAsFixed(0),
+                'Metre',
+              ),
+            ],
+          ),
+        ),
+        // Başlık satırı
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade100,
+          child: const Row(
+            children: [
+              SizedBox(
+                  width: 36,
+                  child: Text('Sıra',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12))),
+              SizedBox(width: 8),
+              SizedBox(
+                  width: 70,
+                  child: Text('Metre',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12))),
+              SizedBox(width: 8),
+              SizedBox(
+                  width: 70,
+                  child: Text('Saksı',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12))),
+              SizedBox(width: 8),
+              Expanded(
+                  child: Text('Cins',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12))),
+            ],
+          ),
+        ),
+        // Sıra listesi
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(bottom: 80),
+            itemCount: _formlar.length,
+            itemBuilder: (context, idx) => _buildSiraRow(idx, isDark),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  //  GÖRSEL SEKMESİ (yeni kroki)
+  // ═══════════════════════════════════════════
+
+  // Cins renk paleti – aynı cins her zaman aynı renk
+  static const _cinsRenkler = <Color>[
+    Color(0xFF059669), // yeşil
+    Color(0xFF2563EB), // mavi
+    Color(0xFFD97706), // turuncu
+    Color(0xFF7C3AED), // mor
+    Color(0xFFDC2626), // kırmızı
+    Color(0xFF0891B2), // cyan
+    Color(0xFFDB2777), // pembe
+    Color(0xFF65A30D), // lime
+    Color(0xFF9333EA), // indigo
+    Color(0xFFEA580C), // deep orange
+    Color(0xFF0D9488), // teal
+    Color(0xFFCA8A04), // sarı
+  ];
+
+  Map<String, Color> _cinsRenkMap() {
+    final map = <String, Color>{};
+    int idx = 0;
+    for (final f in _formlar) {
+      final c = f.cinsCtrl.text.trim();
+      if (c.isNotEmpty && !map.containsKey(c)) {
+        map[c] = _cinsRenkler[idx % _cinsRenkler.length];
+        idx++;
+      }
+    }
+    return map;
+  }
+
+  Map<String, int> _cinsSaksiToplam() {
+    final map = <String, int>{};
+    for (final f in _formlar) {
+      final c = f.cinsCtrl.text.trim();
+      final saksi = int.tryParse(f.saksiCtrl.text.trim()) ?? 0;
+      if (c.isNotEmpty) {
+        map[c] = (map[c] ?? 0) + saksi;
+      }
+    }
+    return map;
+  }
+
+  void _showSiraDuzenlePopup(int idx) {
+    final f = _formlar[idx];
+    final tempMetre = TextEditingController(text: f.metreCtrl.text);
+    final tempSaksi = TextEditingController(text: f.saksiCtrl.text);
+    final tempCins = TextEditingController(text: f.cinsCtrl.text);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${f.numara}. Sıra'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: tempMetre,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Metre',
+                  prefixIcon: const Icon(Icons.straighten, size: 20),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tempSaksi,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Saksı / Fidan',
+                  prefixIcon: const Icon(Icons.local_florist, size: 20),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: tempCins,
+                decoration: InputDecoration(
+                  labelText: 'Cins',
+                  prefixIcon: const Icon(Icons.eco, size: 20),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () {
+              f.metreCtrl.text = tempMetre.text;
+              f.saksiCtrl.text = tempSaksi.text;
+              f.cinsCtrl.text = tempCins.text;
+              setState(() => _hasChanges = true);
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF059669),
+                foregroundColor: Colors.white),
+            child: const Text('Uygula'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGorselView(bool isDark) {
+    final cinsRenk = _cinsRenkMap();
+    final cinsSaksi = _cinsSaksiToplam();
+
+    // En uzun metre değerini bul (ölçek için)
+    double maxMetre = 0;
+    for (final f in _formlar) {
+      final m = double.tryParse(f.metreCtrl.text.trim()) ?? 0;
+      if (m > maxMetre) maxMetre = m;
+    }
+    if (maxMetre <= 0) maxMetre = 1;
+
+    return Column(
+      children: [
+        // Özet bar
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: isDark
+              ? Colors.grey.shade900
+              : const Color(0xFF059669).withOpacity(0.05),
+          child: Row(
+            children: [
+              _summaryItem(
+                  Icons.view_column, '${_formlar.length}', 'Sıra'),
+              const SizedBox(width: 20),
+              _summaryItem(
+                Icons.local_florist,
+                _formlar
+                    .fold<int>(
+                        0,
+                        (s, f) =>
+                            s + (int.tryParse(f.saksiCtrl.text) ?? 0))
+                    .toString(),
+                'Saksı',
+              ),
+              const SizedBox(width: 20),
+              _summaryItem(
+                Icons.straighten,
+                _formlar
+                    .fold<double>(
+                        0,
+                        (s, f) =>
+                            s +
+                            (double.tryParse(f.metreCtrl.text) ?? 0))
+                    .toStringAsFixed(0),
+                'Metre',
+              ),
+            ],
+          ),
+        ),
+
+        // Renk lejandı
+        if (cinsRenk.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: cinsRenk.entries.map((e) {
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: e.value,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(e.key,
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? Colors.white70
+                                : Colors.grey.shade700)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+
+        // Ölçek göstergesi
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+          child: Text(
+            'En uzun sıra: ${maxMetre.toStringAsFixed(1)} m',
+            style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.white54 : Colors.grey.shade500,
+                fontStyle: FontStyle.italic),
+          ),
+        ),
+
+        // Görsel sıra çubukları
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 80),
+            itemCount: _formlar.length,
+            itemBuilder: (context, idx) {
+              final f = _formlar[idx];
+              final metre =
+                  double.tryParse(f.metreCtrl.text.trim()) ?? 0;
+              final saksi =
+                  int.tryParse(f.saksiCtrl.text.trim()) ?? 0;
+              final cins = f.cinsCtrl.text.trim();
+              final ratio = maxMetre > 0 ? metre / maxMetre : 0.0;
+              final barColor = (cins.isNotEmpty && cinsRenk.containsKey(cins))
+                  ? cinsRenk[cins]!
+                  : (isDark ? Colors.grey.shade600 : Colors.grey.shade400);
+
+              return GestureDetector(
+                onTap: () => _showSiraDuzenlePopup(idx),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      // Sıra numarası
+                      SizedBox(
+                        width: 30,
+                        child: Text(
+                          '${f.numara}',
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.white60
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Çubuk
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final maxBarW = constraints.maxWidth;
+                            final barW = math.max(
+                                4.0, maxBarW * ratio);
+
+                            // Saksı noktacıkları (max 30 görsel nokta)
+                            final dotCount = saksi > 0
+                                ? math.min(saksi, 30)
+                                : 0;
+
+                            return Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                // Çubuk
+                                Container(
+                                  width: barW,
+                                  height: 18,
+                                  decoration: BoxDecoration(
+                                    color: barColor,
+                                    borderRadius:
+                                        BorderRadius.circular(3),
+                                  ),
+                                  alignment: Alignment.centerLeft,
+                                  padding:
+                                      const EdgeInsets.only(left: 4),
+                                  child: barW > 50
+                                      ? Text(
+                                          '${metre > 0 ? "${metre.toStringAsFixed(metre == metre.roundToDouble() ? 0 : 1)}m" : ""}',
+                                          style: const TextStyle(
+                                            fontSize: 10,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow:
+                                              TextOverflow.ellipsis,
+                                        )
+                                      : null,
+                                ),
+                                // Saksı noktacıkları
+                                if (dotCount > 0)
+                                  SizedBox(
+                                    width: barW,
+                                    height: 8,
+                                    child: Row(
+                                      children: List.generate(
+                                        dotCount,
+                                        (i) => Expanded(
+                                          child: Center(
+                                            child: Container(
+                                              width: 3,
+                                              height: 3,
+                                              decoration: BoxDecoration(
+                                                color: barColor
+                                                    .withOpacity(0.6),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      // Bilgi etiketleri
+                      SizedBox(
+                        width: 80,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (metre > 0 || saksi > 0)
+                              Text(
+                                '${metre > 0 ? "${metre.toStringAsFixed(metre == metre.roundToDouble() ? 0 : 1)}m" : ""}'
+                                '${metre > 0 && saksi > 0 ? " • " : ""}'
+                                '${saksi > 0 ? "$saksi" : ""}',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDark
+                                      ? Colors.white70
+                                      : Colors.grey.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            if (cins.isNotEmpty)
+                              Text(
+                                cins,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: barColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+
+        // Cins toplam dipnot
+        if (cinsSaksi.isNotEmpty)
+          Container(
+            width: double.infinity,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey.shade900 : Colors.grey.shade50,
+              border: Border(
+                  top: BorderSide(color: Colors.grey.shade300, width: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Cins Dağılımı',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color:
+                            isDark ? Colors.white70 : Colors.grey.shade800)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  children: cinsSaksi.entries.map((e) {
+                    final color = cinsRenk[e.key] ?? Colors.grey;
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${e.key}: ',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white70 : Colors.grey.shade700,
+                          ),
+                        ),
+                        Text(
+                          '${e.value} adet',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 

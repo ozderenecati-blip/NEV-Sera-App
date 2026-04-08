@@ -1443,23 +1443,17 @@ class DashboardTab extends StatelessWidget {
     final cariler = provider.cariler;
     if (cariler.isEmpty) return const SizedBox.shrink();
 
-    double toplamBorcumuz = 0;   // Bizim firmalara borcumuz
-    double toplamAlacagimiz = 0; // Firmaların bize borcu
-    int borcluFirmaSayisi = 0;
-    int alacakliSayisi = 0;
+    double toplamBorc = 0;
+    double toplamOdenen = 0;
+    int firmaSayisi = 0;
 
     for (final c in cariler) {
-      if (c.kalanBorc > 0) {
-        toplamBorcumuz += c.kalanBorc;
-        borcluFirmaSayisi++;
-      }
-      if (c.kalanAlacak > 0) {
-        toplamAlacagimiz += c.kalanAlacak;
-        alacakliSayisi++;
-      }
+      toplamBorc += c.toplamBorc;
+      toplamOdenen += c.toplamOdenen;
+      if (c.kalanBorc > 0) firmaSayisi++;
     }
 
-    if (toplamBorcumuz == 0 && toplamAlacagimiz == 0) return const SizedBox.shrink();
+    final kalanBorc = toplamBorc - toplamOdenen;
 
     return Card(
       child: Padding(
@@ -1475,21 +1469,20 @@ class DashboardTab extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.purple.shade100,
+                        color: Colors.red.shade100,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(Icons.business_center, color: Colors.purple.shade700),
+                      child: Icon(Icons.arrow_upward, color: Colors.red.shade700),
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'Cari Hesaplar',
+                      'Cari / Verecekler',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 TextButton(
                   onPressed: () {
-                    // Cariler tab'ına git (index 4)
                     final homeState = context.findAncestorStateOfType<_HomeScreenState>();
                     if (homeState != null) {
                       homeState._navigateToTab(4);
@@ -1500,77 +1493,75 @@ class DashboardTab extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            // Vereceklerimiz (borcumuz)
-            if (toplamBorcumuz > 0)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.shade100),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.arrow_upward, color: Colors.red.shade700, size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Vereceklerimiz',
-                            style: TextStyle(fontSize: 13, color: Colors.red.shade800, fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            '$borcluFirmaSayisi firmaya borçluyuz',
-                            style: TextStyle(fontSize: 11, color: Colors.red.shade400),
-                          ),
-                        ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Toplam Borç',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                       ),
-                    ),
-                    Text(
-                      fmt.format(toplamBorcumuz),
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red.shade700),
-                    ),
-                  ],
-                ),
-              ),
-            // Alacaklarımız
-            if (toplamAlacagimiz > 0)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.green.shade100),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.arrow_downward, color: Colors.green.shade700, size: 28),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Alacaklarımız',
-                            style: TextStyle(fontSize: 13, color: Colors.green.shade800, fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            '$alacakliSayisi firma bize borçlu',
-                            style: TextStyle(fontSize: 11, color: Colors.green.shade400),
-                          ),
-                        ],
+                      const SizedBox(height: 4),
+                      Text(
+                        fmt.format(kalanBorc),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: kalanBorc > 0 ? Colors.red : Colors.green,
+                        ),
                       ),
-                    ),
-                    Text(
-                      fmt.format(toplamAlacagimiz),
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green.shade700),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+                Container(width: 1, height: 40, color: Colors.grey.shade300),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Borçlu Firma',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$firmaSayisi',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (toplamBorc > 0) ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Ödeme Oranı',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  Text(
+                    '${((toplamOdenen / toplamBorc) * 100).toStringAsFixed(1)}%',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
               ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: toplamBorc > 0 ? toplamOdenen / toplamBorc : 0,
+                backgroundColor: Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.red.shade400),
+              ),
+            ],
           ],
         ),
       ),

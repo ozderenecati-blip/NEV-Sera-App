@@ -5,6 +5,7 @@ class AppSettings {
   final String deger;
   final bool aktif;
   final int? ortakId; // Kasanın bağlı olduğu ortak
+  final String? paraBirimi; // Kasanın para birimi (TL, EUR, USD)
 
   AppSettings({
     this.id,
@@ -12,7 +13,16 @@ class AppSettings {
     required this.deger,
     this.aktif = true,
     this.ortakId,
+    this.paraBirimi,
   });
+
+  /// Kasa için görünen ad (para birimi varsa ekle)
+  String get kasaGosterimAdi {
+    if (paraBirimi != null && paraBirimi!.isNotEmpty && paraBirimi != 'TL') {
+      return '$deger ($paraBirimi)';
+    }
+    return deger;
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -21,6 +31,7 @@ class AppSettings {
       'deger': deger,
       'aktif': aktif ? 1 : 0,
       'ortak_id': ortakId,
+      'para_birimi': paraBirimi,
     };
   }
 
@@ -29,8 +40,9 @@ class AppSettings {
       id: map['id'],
       tip: map['tip'] ?? '',
       deger: map['deger'] ?? '',
-      aktif: map['aktif'] == 1,
+      aktif: map['aktif'] == 1 || map['aktif'] == true,
       ortakId: map['ortak_id'],
+      paraBirimi: map['para_birimi'],
     );
   }
 
@@ -40,6 +52,7 @@ class AppSettings {
     String? deger,
     bool? aktif,
     int? ortakId,
+    String? paraBirimi,
   }) {
     return AppSettings(
       id: id ?? this.id,
@@ -47,6 +60,7 @@ class AppSettings {
       deger: deger ?? this.deger,
       aktif: aktif ?? this.aktif,
       ortakId: ortakId ?? this.ortakId,
+      paraBirimi: paraBirimi ?? this.paraBirimi,
     );
   }
 }

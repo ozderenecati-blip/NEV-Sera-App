@@ -3,15 +3,34 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../models/gundelikci.dart';
+import '../models/kasa_hareketi.dart';
+import '../services/excel_service.dart';
 import '../widgets/ux_components.dart';
 
-class GiderPusulasiScreen extends StatelessWidget {
+class GiderPusulasiScreen extends StatefulWidget {
   const GiderPusulasiScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+  State<GiderPusulasiScreen> createState() => _GiderPusulasiScreenState();
+}
 
+class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gider Pusulası'),
@@ -21,66 +40,79 @@ class GiderPusulasiScreen extends StatelessWidget {
             onPressed: () => _showGundelikciDialog(context),
             tooltip: 'Çalışan Ekle',
           ),
+          IconButton(
+            icon: const Icon(Icons.file_download),
+            onPressed: () => _exportExcel(context),
+            tooltip: 'Excel\'e Aktar',
+          ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(icon: Icon(Icons.people), text: 'Çalışanlar'),
+            Tab(icon: Icon(Icons.history), text: 'Geçmiş'),
+          ],
+        ),
       ),
-      body: Consumer<AppProvider>(
-        builder: (context, provider, child) {
-          if (provider.isLoading) {
-            return const SkeletonListView(itemCount: 4);
-          }
-
-          final gundelikciler = provider.gundelikciler;
-
-          if (gundelikciler.isEmpty) {
-            return EmptyStateWidget(
-              icon: Icons.person_outline,
-              title: 'Çalışan bulunamadı',
-              subtitle: 'Çalışanlarınızı ekleyerek gider pusulanızı yönetin',
-              buttonText: 'Çalışan Ekle',
-              onButtonPressed: () => _showGundelikciDialog(context),
-              iconColor: Colors.orange,
-            );
-          }
-
-          return RefreshableList(
-            onRefresh: () => provider.loadAllData(),
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // Özet kartı
-                _buildOzetCard(context, provider, currencyFormat),
-                const SizedBox(height: 16),
-
-                // Çalışan listesi
-                ...gundelikciler.map((g) => _buildGundelikciCard(context, g, provider, currencyFormat)),
-              ],
-            ),
-          );
-        },
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildCalisanlarTab(),
+          _buildGecmisTab(),
+        ],
       ),
     );
   }
 
+  // =================== ÇALIŞANLAR TAB ===================
+  Widget _buildCalisanlarTab() {
+    final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+
+    return Consumer<AppProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading) {
+          return const SkeletonListView(itemCount: 4);
+        }
+
+        final gundelikciler = provider.gundelikciler;
+
+        if (gundelikciler.isEmpty) {
+          return EmptyStateWidget(
+            icon: Icons.person_outline,
+            title: 'Çalışan bulunamadı',
+            subtitle: 'Çalışanlarınızı ekleyerek gider pusulanızı yönetin',
+            buttonText: 'Çalışan Ekle',
+            onButtonPressed: () => _showGundelikciDialog(context),
+            iconColor: Colors.orange,
+          );
+        }
+
+        return RefreshableList(
+          onRefresh: () => provider.loadAllData(),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildOzetCard(context, provider, currencyFormat),
+              const SizedBox(height: 16),
+              ...gundelikciler.map((g) => _buildGundelikciCard(context, g, provider, currencyFormat)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildOzetCard(BuildContext context, AppProvider provider, NumberFormat fmt) {
-    // Gündelikçilere verilen avanslar
     final avanslar = provider.kasaHareketleri
         .where((h) => h.islemKaynagi == 'gider_pusulasi')
         .toList();
-
-    // Kesilen gider pusulaları (resmileştirmeler)
     final resmilestirmeler = provider.kasaHareketleri
         .where((h) => h.islemKaynagi == 'resmilestirme')
-        .toList();
-    
-    // Ödenen vergiler
-    final vergiler = provider.kasaHareketleri
-        .where((h) => h.islemKaynagi == 'gider_pusulasi_vergi')
         .toList();
 
     double toplamAvans = avanslar.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
     double toplamResmilestirme = resmilestirmeler.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
-    double toplamVergi = vergiler.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
-    double kalanBorc = toplamAvans - toplamResmilestirme; // Gündelikçilerin bize olan borcu
+    double kalanBorc = toplamAvans - toplamResmilestirme;
 
     return Card(
       child: Padding(
@@ -127,25 +159,6 @@ class GiderPusulasiScreen extends StatelessWidget {
                 ),
               ],
             ),
-            if (toplamVergi > 0) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.account_balance, size: 16, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Text('Ödenen Vergi: ${fmt.format(toplamVergi)}', 
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700)),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -153,25 +166,16 @@ class GiderPusulasiScreen extends StatelessWidget {
   }
 
   Widget _buildGundelikciCard(BuildContext context, Gundelikci g, AppProvider provider, NumberFormat fmt) {
-    // Bu gündelikçiye verilen avanslar
     final avanslar = provider.kasaHareketleri
         .where((h) => h.islemKaynagi == 'gider_pusulasi' && h.iliskiliId == g.id)
         .toList();
-
-    // Bu gündelikçi için kesilen pusulalar
     final resmilestirmeler = provider.kasaHareketleri
         .where((h) => h.islemKaynagi == 'resmilestirme' && h.iliskiliId == g.id)
-        .toList();
-    
-    // Bu gündelikçi için ödenen vergiler
-    final vergiler = provider.kasaHareketleri
-        .where((h) => h.islemKaynagi == 'gider_pusulasi_vergi' && h.iliskiliId == g.id)
         .toList();
 
     double toplamAvans = avanslar.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
     double toplamResmilestirme = resmilestirmeler.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
-    double toplamVergi = vergiler.fold(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
-    double kalanBorc = toplamAvans - toplamResmilestirme; // Gündelikçinin bize olan borcu
+    double kalanBorc = toplamAvans - toplamResmilestirme;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -207,14 +211,10 @@ class GiderPusulasiScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bilgiler
                 if (g.tcNo != null && g.tcNo!.isNotEmpty) _buildInfoRow(Icons.badge, 'TC No', g.tcNo!),
                 if (g.telefon != null && g.telefon!.isNotEmpty) _buildInfoRow(Icons.phone, 'Telefon', g.telefon!),
                 if (g.adres != null && g.adres!.isNotEmpty) _buildInfoRow(Icons.location_on, 'Adres', g.adres!),
-
                 const Divider(height: 24),
-
-                // Özet
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -238,31 +238,8 @@ class GiderPusulasiScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                
-                if (toplamVergi > 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.account_balance, size: 14, color: Colors.orange),
-                        const SizedBox(width: 6),
-                        Text('Ödenen Vergi: ${fmt.format(toplamVergi)}', 
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange.shade700)),
-                      ],
-                    ),
-                  ),
-                ],
-
                 const SizedBox(height: 16),
-
-                // Son işlemler
-                if (avanslar.isNotEmpty || resmilestirmeler.isNotEmpty || vergiler.isNotEmpty) ...[
+                if (avanslar.isNotEmpty || resmilestirmeler.isNotEmpty) ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -270,24 +247,20 @@ class GiderPusulasiScreen extends StatelessWidget {
                       TextButton.icon(
                         icon: const Icon(Icons.history, size: 16),
                         label: const Text('Tüm İşlemler'),
-                        onPressed: () => _showIslemGecmisi(context, g, [...avanslar, ...resmilestirmeler, ...vergiler]),
+                        onPressed: () => _showIslemGecmisi(context, g, [...avanslar, ...resmilestirmeler]),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  ...([...avanslar, ...resmilestirmeler, ...vergiler]
+                  ...([...avanslar, ...resmilestirmeler]
                     ..sort((a, b) => b.tarih.compareTo(a.tarih)))
                     .take(5)
                     .map((h) => ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           leading: Icon(
-                            h.islemKaynagi == 'gider_pusulasi' ? Icons.money_off : 
-                            h.islemKaynagi == 'resmilestirme' ? Icons.receipt :
-                            Icons.account_balance,
-                            color: h.islemKaynagi == 'gider_pusulasi' ? Colors.red : 
-                            h.islemKaynagi == 'resmilestirme' ? Colors.purple :
-                            Colors.orange,
+                            h.islemKaynagi == 'gider_pusulasi' ? Icons.money_off : Icons.receipt,
+                            color: h.islemKaynagi == 'gider_pusulasi' ? Colors.red : Colors.purple,
                             size: 20,
                           ),
                           title: Text(h.aciklama, style: const TextStyle(fontSize: 13)),
@@ -299,9 +272,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                             fmt.format(h.tlKarsiligi ?? h.tutar),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: h.islemKaynagi == 'gider_pusulasi' ? Colors.red : 
-                              h.islemKaynagi == 'resmilestirme' ? Colors.purple :
-                              Colors.orange,
+                              color: h.islemKaynagi == 'gider_pusulasi' ? Colors.red : Colors.purple,
                             ),
                           ),
                         )),
@@ -314,6 +285,86 @@ class GiderPusulasiScreen extends StatelessWidget {
     );
   }
 
+  // =================== GEÇMİŞ TAB ===================
+  Widget _buildGecmisTab() {
+    final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
+    final dateFormat = DateFormat('dd.MM.yyyy');
+
+    return Consumer<AppProvider>(
+      builder: (context, provider, child) {
+        if (provider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final pusulalar = provider.kasaHareketleri
+            .where((h) => h.islemKaynagi == 'resmilestirme')
+            .toList()
+          ..sort((a, b) => b.tarih.compareTo(a.tarih));
+
+        if (pusulalar.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.receipt_long_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text('Henüz gider pusulası kesilmemiş', style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Text('Toplam: ${pusulalar.length} pusula', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(
+                    'Tutar: ${currencyFormat.format(pusulalar.fold<double>(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar)))}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SingleChildScrollView(
+                  child: DataTable(
+                    columnSpacing: 20,
+                    columns: const [
+                      DataColumn(label: Text('İsim', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('TC No', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Tarih', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Meblağ', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+                    ],
+                    rows: pusulalar.map((h) {
+                      final gundelikci = provider.gundelikciler.cast<Gundelikci?>().firstWhere(
+                        (g) => g!.id == h.iliskiliId,
+                        orElse: () => null,
+                      );
+                      return DataRow(cells: [
+                        DataCell(Text(gundelikci?.adSoyad ?? 'Bilinmiyor')),
+                        DataCell(Text(gundelikci?.tcNo ?? '-')),
+                        DataCell(Text(dateFormat.format(h.tarih))),
+                        DataCell(Text(currencyFormat.format(h.tlKarsiligi ?? h.tutar))),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // =================== DIALOGS ===================
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -379,7 +430,6 @@ class GiderPusulasiScreen extends StatelessWidget {
                 );
                 return;
               }
-
               final provider = Provider.of<AppProvider>(context, listen: false);
               final newG = Gundelikci(
                 id: gundelikci?.id,
@@ -388,13 +438,11 @@ class GiderPusulasiScreen extends StatelessWidget {
                 adres: adresController.text.trim().isEmpty ? null : adresController.text.trim(),
                 telefon: telefonController.text.trim().isEmpty ? null : telefonController.text.trim(),
               );
-
               if (isEdit) {
                 await provider.updateGundelikci(newG);
               } else {
                 await provider.addGundelikci(newG);
               }
-
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
             child: Text(isEdit ? 'Kaydet' : 'Ekle'),
@@ -406,23 +454,16 @@ class GiderPusulasiScreen extends StatelessWidget {
 
   void _showPusulaKesDialog(BuildContext context, Gundelikci g, double kalanBorc, AppProvider provider) {
     final brutTutarController = TextEditingController(text: kalanBorc.toStringAsFixed(2));
-    final vergiOraniController = TextEditingController(text: '20'); // Varsayılan %20
     final aciklamaController = TextEditingController(text: 'Gider Pusulası - ${g.adSoyad}');
     DateTime selectedDate = DateTime.now();
-    String? selectedKasa = provider.kasalar.isNotEmpty ? provider.kasalar.first : null;
     final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    
-    double hesaplananVergi = 0;
 
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) {
-          // Vergi hesapla
           final brutTutar = double.tryParse(brutTutarController.text.replaceAll(',', '.')) ?? 0;
-          final vergiOrani = double.tryParse(vergiOraniController.text.replaceAll(',', '.')) ?? 0;
-          hesaplananVergi = brutTutar * (vergiOrani / 100);
-          
+
           return AlertDialog(
             title: const Text('Gider Pusulası Kes'),
             content: SingleChildScrollView(
@@ -430,7 +471,6 @@ class GiderPusulasiScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Bilgilendirme
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -441,81 +481,28 @@ class GiderPusulasiScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(g.adSoyad, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        if (g.tcNo != null) Text('TC: ${g.tcNo}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                         const SizedBox(height: 4),
-                        Text('Çalışanın size olan borcu: ${currencyFormat.format(kalanBorc)}', 
+                        Text('Çalışanın size olan borcu: ${currencyFormat.format(kalanBorc)}',
                           style: TextStyle(fontSize: 12, color: Colors.blue.shade700)),
                         const SizedBox(height: 4),
-                        Text('Bu borç daha önce avans olarak ödenmiştir.', 
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
+                        Text('Bu borç daha önce avans olarak ödenmiştir.\nPusula kesildiğinde kasaya etki etmez, sadece kayıt tutulur.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Brüt Tutar
                   TextField(
                     controller: brutTutarController,
                     decoration: const InputDecoration(
-                      labelText: 'Resmileştirilecek Tutar (₺)',
+                      labelText: 'Brüt Tutar (₺)',
                       prefixIcon: Icon(Icons.receipt),
-                      helperText: 'Çalışanın borcundan düşülecek',
+                      helperText: 'Çalışanın borcundan düşülecek tutar',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Vergi Oranı
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: vergiOraniController,
-                          decoration: const InputDecoration(
-                            labelText: 'Stopaj Oranı (%)',
-                            prefixIcon: Icon(Icons.percent),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.shade200),
-                          ),
-                          child: Column(
-                            children: [
-                              const Text('Ödenecek Vergi', style: TextStyle(fontSize: 13)),
-                              Text(
-                                currencyFormat.format(hesaplananVergi),
-                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Vergi için Kasa seçimi
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedKasa,
-                    decoration: const InputDecoration(
-                      labelText: 'Vergi Ödenecek Kasa *',
-                      prefixIcon: Icon(Icons.account_balance_wallet),
-                    ),
-                    items: provider.kasalar.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
-                    onChanged: (v) => setState(() => selectedKasa = v),
-                  ),
-                  const SizedBox(height: 12),
-                  
-                  // Tarih
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.calendar_today),
@@ -532,16 +519,11 @@ class GiderPusulasiScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 12),
-                  
-                  // Açıklama
                   TextField(
                     controller: aciklamaController,
                     decoration: const InputDecoration(labelText: 'Açıklama', prefixIcon: Icon(Icons.note)),
                   ),
-                  
                   const SizedBox(height: 16),
-                  
-                  // Özet
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -553,24 +535,16 @@ class GiderPusulasiScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Resmileştirilen:'),
+                            const Text('Resmileştirilecek:'),
                             Text(currencyFormat.format(brutTutar), style: const TextStyle(fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Stopaj Vergisi:'),
-                            Text(currencyFormat.format(hesaplananVergi), style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700)),
                           ],
                         ),
                         const Divider(),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Kasadan Çıkacak:', style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(currencyFormat.format(hesaplananVergi), style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+                            const Text('Kasaya etkisi:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text('Yok (sadece kayıt)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade700)),
                           ],
                         ),
                       ],
@@ -591,22 +565,12 @@ class GiderPusulasiScreen extends StatelessWidget {
                     );
                     return;
                   }
-                  if (selectedKasa == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Kasa seçin'), backgroundColor: Colors.red),
-                    );
-                    return;
-                  }
-
                   final success = await provider.giderPusulasiKes(
                     gundelikci: g,
                     brutTutar: brutTutar,
-                    vergiTutari: hesaplananVergi,
                     tarih: selectedDate,
                     aciklama: aciklamaController.text.trim(),
-                    kasa: selectedKasa,
                   );
-
                   if (dialogContext.mounted) {
                     Navigator.pop(dialogContext);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -626,28 +590,18 @@ class GiderPusulasiScreen extends StatelessWidget {
     );
   }
 
-  void _showIslemGecmisi(BuildContext context, Gundelikci g, List islemler) {
+  void _showIslemGecmisi(BuildContext context, Gundelikci g, List<KasaHareketi> islemler) {
     final currencyFormat = NumberFormat.currency(locale: 'tr_TR', symbol: '₺');
-    
-    // Tarihe göre sırala (en yeni en üstte)
     islemler.sort((a, b) => b.tarih.compareTo(a.tarih));
-    
-    // Toplamları hesapla
+
     double toplamAvans = 0;
     double toplamResmilestirme = 0;
-    double toplamVergi = 0;
-    
     for (var h in islemler) {
       final tutar = h.tlKarsiligi ?? h.tutar;
-      if (h.islemKaynagi == 'gider_pusulasi') {
-        toplamAvans += tutar;
-      } else if (h.islemKaynagi == 'resmilestirme') {
-        toplamResmilestirme += tutar;
-      } else if (h.islemKaynagi == 'gider_pusulasi_vergi') {
-        toplamVergi += tutar;
-      }
+      if (h.islemKaynagi == 'gider_pusulasi') toplamAvans += tutar;
+      else if (h.islemKaynagi == 'resmilestirme') toplamResmilestirme += tutar;
     }
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -660,7 +614,6 @@ class GiderPusulasiScreen extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -679,15 +632,10 @@ class GiderPusulasiScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
                 ],
               ),
             ),
-            
-            // Özet kartları
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -695,16 +643,13 @@ class GiderPusulasiScreen extends StatelessWidget {
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
                       child: Column(
                         children: [
                           const Icon(Icons.money_off, color: Colors.red, size: 20),
                           const SizedBox(height: 4),
                           const Text('Avans', style: TextStyle(fontSize: 13)),
-                          Text(currencyFormat.format(toplamAvans), 
+                          Text(currencyFormat.format(toplamAvans),
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 12)),
                         ],
                       ),
@@ -714,36 +659,14 @@ class GiderPusulasiScreen extends StatelessWidget {
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.purple.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(8)),
                       child: Column(
                         children: [
                           const Icon(Icons.receipt, color: Colors.purple, size: 20),
                           const SizedBox(height: 4),
                           const Text('Pusula', style: TextStyle(fontSize: 13)),
-                          Text(currencyFormat.format(toplamResmilestirme), 
+                          Text(currencyFormat.format(toplamResmilestirme),
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.purple, fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          const Icon(Icons.account_balance, color: Colors.orange, size: 20),
-                          const SizedBox(height: 4),
-                          const Text('Vergi', style: TextStyle(fontSize: 13)),
-                          Text(currencyFormat.format(toplamVergi), 
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 12)),
                         ],
                       ),
                     ),
@@ -751,10 +674,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                 ],
               ),
             ),
-            
             const SizedBox(height: 8),
-            
-            // Bakiye
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Container(
@@ -773,8 +693,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                     Text(
                       currencyFormat.format(toplamAvans - toplamResmilestirme),
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
+                        fontWeight: FontWeight.bold, fontSize: 18,
                         color: (toplamAvans - toplamResmilestirme) > 0 ? Colors.orange.shade800 : Colors.green.shade800,
                       ),
                     ),
@@ -782,10 +701,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                 ),
               ),
             ),
-            
             const SizedBox(height: 16),
-            
-            // İşlem listesi
             Expanded(
               child: islemler.isEmpty
                   ? Center(child: Text('İşlem bulunamadı', style: TextStyle(color: Colors.grey.shade600)))
@@ -794,32 +710,16 @@ class GiderPusulasiScreen extends StatelessWidget {
                       itemCount: islemler.length,
                       itemBuilder: (_, i) {
                         final h = islemler[i];
-                        IconData icon;
-                        Color color;
-                        String tip;
-                        
-                        if (h.islemKaynagi == 'gider_pusulasi') {
-                          icon = Icons.money_off;
-                          color = Colors.red;
-                          tip = 'Avans Ödemesi';
-                        } else if (h.islemKaynagi == 'resmilestirme') {
-                          icon = Icons.receipt;
-                          color = Colors.purple;
-                          tip = 'Gider Pusulası';
-                        } else {
-                          icon = Icons.account_balance;
-                          color = Colors.orange;
-                          tip = 'Vergi Ödemesi';
-                        }
-                        
+                        final isAvans = h.islemKaynagi == 'gider_pusulasi';
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
                             leading: CircleAvatar(
-                              backgroundColor: color.withOpacity(0.1),
-                              child: Icon(icon, color: color, size: 20),
+                              backgroundColor: (isAvans ? Colors.red : Colors.purple).withValues(alpha: 0.1),
+                              child: Icon(isAvans ? Icons.money_off : Icons.receipt,
+                                color: isAvans ? Colors.red : Colors.purple, size: 20),
                             ),
-                            title: Text(tip, style: const TextStyle(fontWeight: FontWeight.w500)),
+                            title: Text(isAvans ? 'Avans Ödemesi' : 'Gider Pusulası', style: const TextStyle(fontWeight: FontWeight.w500)),
                             subtitle: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -832,7 +732,7 @@ class GiderPusulasiScreen extends StatelessWidget {
                             ),
                             trailing: Text(
                               currencyFormat.format(h.tlKarsiligi ?? h.tutar),
-                              style: TextStyle(fontWeight: FontWeight.bold, color: color),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: isAvans ? Colors.red : Colors.purple),
                             ),
                             isThreeLine: true,
                           ),
@@ -844,5 +744,39 @@ class GiderPusulasiScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // =================== EXCEL EXPORT ===================
+  Future<void> _exportExcel(BuildContext context) async {
+    final provider = Provider.of<AppProvider>(context, listen: false);
+    final pusulalar = provider.kasaHareketleri
+        .where((h) => h.islemKaynagi == 'resmilestirme')
+        .toList()
+      ..sort((a, b) => b.tarih.compareTo(a.tarih));
+
+    if (pusulalar.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Dışa aktarılacak pusula bulunamadı'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+
+    try {
+      final excelService = ExcelService();
+      final filePath = await excelService.exportToExcel(pusulalar);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel oluşturuldu: $filePath'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Excel oluşturulamadı: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 }

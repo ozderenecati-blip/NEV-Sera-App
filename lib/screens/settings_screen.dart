@@ -255,6 +255,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   void _showAddKasaDialog() {
     final controller = TextEditingController();
     int? selectedOrtakId;
+    String selectedParaBirimi = 'TL';
     final provider = Provider.of<AppProvider>(context, listen: false);
     final ortaklar = provider.ortaklar;
     
@@ -270,13 +271,27 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 controller: controller,
                 decoration: const InputDecoration(
                   labelText: 'Kasa Adı',
-                  hintText: 'Örn: Necati, AveA, Nev Seracılık',
+                  hintText: 'Örn: NEV EUR, Mert USD, Nev Seracılık',
                 ),
                 autofocus: true,
               ),
               const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedParaBirimi,
+                decoration: const InputDecoration(
+                  labelText: 'Para Birimi',
+                  prefixIcon: Icon(Icons.currency_exchange),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
+                  DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                  DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
+                ],
+                onChanged: (v) => setDialogState(() => selectedParaBirimi = v!),
+              ),
+              const SizedBox(height: 16),
               DropdownButtonFormField<int?>(
-                initialValue: selectedOrtakId,
+                value: selectedOrtakId,
                 decoration: const InputDecoration(
                   labelText: 'Bağlı Ortak/Şahıs',
                   prefixIcon: Icon(Icons.person),
@@ -307,7 +322,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             FilledButton(
               onPressed: () async {
                 if (controller.text.trim().isNotEmpty) {
-                  await provider.addSettingWithOrtak('kasa', controller.text.trim(), selectedOrtakId);
+                  final setting = AppSettings(
+                    tip: 'kasa',
+                    deger: controller.text.trim(),
+                    ortakId: selectedOrtakId,
+                    paraBirimi: selectedParaBirimi,
+                  );
+                  await provider.addSettingFull(setting);
                   if (dialogContext.mounted) {
                     Navigator.of(dialogContext).pop();
                     setState(() {});
@@ -325,6 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   void _showEditKasaDialog(AppSettings item) {
     final controller = TextEditingController(text: item.deger);
     int? selectedOrtakId = item.ortakId;
+    String selectedParaBirimi = item.paraBirimi ?? 'TL';
     final provider = Provider.of<AppProvider>(context, listen: false);
     final ortaklar = provider.ortaklar;
     
@@ -342,8 +364,22 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                 autofocus: true,
               ),
               const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: selectedParaBirimi,
+                decoration: const InputDecoration(
+                  labelText: 'Para Birimi',
+                  prefixIcon: Icon(Icons.currency_exchange),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
+                  DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                  DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
+                ],
+                onChanged: (v) => setDialogState(() => selectedParaBirimi = v!),
+              ),
+              const SizedBox(height: 16),
               DropdownButtonFormField<int?>(
-                initialValue: selectedOrtakId,
+                value: selectedOrtakId,
                 decoration: const InputDecoration(
                   labelText: 'Bağlı Ortak/Şahıs',
                   prefixIcon: Icon(Icons.person),
@@ -387,6 +423,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                     tip: item.tip,
                     deger: controller.text.trim(),
                     ortakId: selectedOrtakId,
+                    paraBirimi: selectedParaBirimi,
                   );
                   await provider.updateSetting(updatedSetting);
                   if (dialogContext.mounted) {

@@ -34,8 +34,7 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
     setState(() {
       _ortakIslemleri = hareketler.where((h) => 
         h.islemKaynagi == 'ortak_avans' || 
-        h.islemKaynagi == 'ortak_geri_odeme' ||
-        h.islemKaynagi == 'ortak_stopaj'
+        h.islemKaynagi == 'ortak_geri_odeme'
       ).toList();
     });
   }
@@ -124,7 +123,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
     final ozet = provider.ortakOzet;
     final toplamVerilen = ozet['toplam_verilen'] ?? 0;
     final toplamGeriOdenen = ozet['toplam_geri_odenen'] ?? 0;
-    final toplamStopaj = ozet['toplam_stopaj'] ?? 0;
     final kalanBorc = ozet['kalan_borc'] ?? 0;
 
     return Card(
@@ -149,7 +147,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
             const Divider(height: 24),
             _buildOzetRow('Ortakların Verdiği', toplamVerilen, Colors.green),
             _buildOzetRow('Geri Ödenen', toplamGeriOdenen, Colors.orange),
-            _buildOzetRow('Kesilen Stopaj', toplamStopaj, Colors.purple),
             const Divider(height: 16),
             _buildOzetRow(
               'Kalan Borç',
@@ -240,13 +237,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                             ),
                             Row(
                               children: [
-                                Text(
-                                  'Stopaj: ${ortak.stopajOraniStr}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
                                 if (ortakKasalari.isNotEmpty) ...[
                                   const SizedBox(width: 8),
                                   Icon(Icons.account_balance_wallet, size: 12, color: Colors.blue[400]),
@@ -300,7 +290,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                     children: [
                       _buildMiniStat('Verilen', ortak.toplamVerilen, Colors.green),
                       _buildMiniStat('Ödenen', ortak.toplamGeriOdenen, Colors.orange),
-                      _buildMiniStat('Stopaj', ortak.toplamStopaj, Colors.purple),
                     ],
                   ),
                   
@@ -458,7 +447,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
 
   Widget _buildIslemRow(KasaHareketi hareket) {
     final isAvans = hareket.islemKaynagi == 'ortak_avans';
-    final isStopaj = hareket.islemKaynagi == 'ortak_stopaj';
     
     IconData icon;
     Color color;
@@ -468,10 +456,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
       icon = Icons.arrow_downward;
       color = Colors.green;
       tip = 'Avans';
-    } else if (isStopaj) {
-      icon = Icons.receipt;
-      color = Colors.purple;
-      tip = 'Stopaj';
     } else {
       icon = Icons.arrow_upward;
       color = Colors.orange;
@@ -511,7 +495,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
     final telefonController = TextEditingController(text: ortak?.telefon ?? '');
     final adresController = TextEditingController(text: ortak?.adres ?? '');
     final notlarController = TextEditingController(text: ortak?.notlar ?? '');
-    double stopajOrani = ortak?.stopajOrani ?? 15.0;
 
     showDialog(
       context: context,
@@ -559,26 +542,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                     ),
                     maxLines: 2,
                   ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      const Icon(Icons.percent, color: Colors.grey),
-                      const Text('Stopaj Oranı:'),
-                      ChoiceChip(
-                        label: const Text('%15'),
-                        selected: stopajOrani == 15.0,
-                        onSelected: (s) => setDialogState(() => stopajOrani = 15.0),
-                      ),
-                      ChoiceChip(
-                        label: const Text('%20'),
-                        selected: stopajOrani == 20.0,
-                        onSelected: (s) => setDialogState(() => stopajOrani = 20.0),
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: notlarController,
@@ -608,7 +571,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   tcNo: tcNoController.text.trim().isEmpty ? null : tcNoController.text.trim(),
                   telefon: telefonController.text.trim().isEmpty ? null : telefonController.text.trim(),
                   adres: adresController.text.trim().isEmpty ? null : adresController.text.trim(),
-                  stopajOrani: stopajOrani,
                   notlar: notlarController.text.trim().isEmpty ? null : notlarController.text.trim(),
                 );
                 
@@ -897,26 +859,16 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
 
   void _showResmilestirDialog(BuildContext context, Ortak ortak, AppProvider provider) {
     final formKey = GlobalKey<FormState>();
-    final brutTutarController = TextEditingController();
+    final tutarController = TextEditingController();
     String secilenKasa = provider.kasalar.isNotEmpty ? provider.kasalar.first : '';
     DateTime secilenTarih = DateTime.now();
     String paraBirimi = 'TL';
-    
-    double stopajTutari = 0;
-    double netOdeme = 0;
-
-    void hesapla(StateSetter setDialogState) {
-      final brut = double.tryParse(brutTutarController.text.replaceAll(',', '.')) ?? 0;
-      stopajTutari = brut * ortak.stopajOrani / 100;
-      netOdeme = brut - stopajTutari;
-      setDialogState(() {});
-    }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Resmileştir - ${ortak.adSoyad}'),
+          title: Text('Borç Kapat - ${ortak.adSoyad}'),
           content: SingleChildScrollView(
             child: Form(
               key: formKey,
@@ -927,31 +879,20 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.purple[50],
+                      color: Colors.blue[50],
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.info_outline, color: Colors.purple[700]),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Kalan Borç: ₺${_numberFormat.format(ortak.kalanBorc)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.purple[800],
-                              ),
+                        Icon(Icons.info_outline, color: Colors.blue[700]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Kalan Borç: ₺${_numberFormat.format(ortak.kalanBorc)}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[800],
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Stopaj Oranı: ${ortak.stopajOraniStr}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.purple[700],
                           ),
                         ),
                       ],
@@ -959,18 +900,17 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Brüt tutar girin, stopaj otomatik hesaplanır.',
+                    'Kapatılacak borç tutarını girin.',
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: brutTutarController,
+                    controller: tutarController,
                     decoration: const InputDecoration(
-                      labelText: 'Brüt Tutar *',
+                      labelText: 'Tutar *',
                       prefixIcon: Icon(Icons.money),
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onChanged: (_) => hesapla(setDialogState),
                     validator: (v) {
                       if (v?.isEmpty == true) return 'Zorunlu';
                       final tutar = double.tryParse(v!.replaceAll(',', '.'));
@@ -978,24 +918,6 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                       if (tutar > ortak.kalanBorc) return 'Borçtan fazla olamaz';
                       return null;
                     },
-                  ),
-                  const SizedBox(height: 16),
-                  // Hesaplama Özeti
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildHesapRow('Brüt Tutar', double.tryParse(brutTutarController.text.replaceAll(',', '.')) ?? 0),
-                        _buildHesapRow('Stopaj (${ortak.stopajOraniStr})', stopajTutari, color: Colors.purple),
-                        const Divider(),
-                        _buildHesapRow('Net Ödeme', netOdeme, isBold: true, color: Colors.green),
-                      ],
-                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -1052,13 +974,11 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
               onPressed: () async {
                 if (!formKey.currentState!.validate()) return;
                 
-                final brutTutar = double.parse(brutTutarController.text.replaceAll(',', '.'));
+                final tutar = double.parse(tutarController.text.replaceAll(',', '.'));
                 
                 final success = await provider.ortakOdemesiResmilestir(
                   ortak: ortak,
-                  brutTutar: brutTutar,
-                  stopajTutari: stopajTutari,
-                  netOdeme: netOdeme,
+                  tutar: tutar,
                   kasa: secilenKasa,
                   tarih: secilenTarih,
                   paraBirimi: paraBirimi,
@@ -1070,41 +990,16 @@ class _OrtaklarScreenState extends State<OrtaklarScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Resmileştirildi! Net ₺${_numberFormat.format(netOdeme)} ödendi, '
-                        '₺${_numberFormat.format(stopajTutari)} stopaj kesildi.'
+                        '₺${_numberFormat.format(tutar)} borç kapatıldı.'
                       ),
                     ),
                   );
                 }
               },
-              child: const Text('Resmileştir'),
+              child: const Text('Borç Kapat'),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHesapRow(String label, double tutar, {bool isBold = false, Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Text(
-            '₺${_numberFormat.format(tutar)}',
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-              color: color,
-            ),
-          ),
-        ],
       ),
     );
   }

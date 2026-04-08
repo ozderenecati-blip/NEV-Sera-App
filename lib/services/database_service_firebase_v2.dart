@@ -8,6 +8,7 @@ import '../models/musteri.dart';
 import '../models/satis.dart';
 import '../models/settings.dart';
 import '../models/yaklasan_odeme.dart';
+import '../models/cari.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -1072,6 +1073,130 @@ class DatabaseService {
     } catch (e) {
       print('updateTahsilat error: $e');
       return 0;
+    }
+  }
+
+  // ==================== CARİLER ====================
+
+  Future<int> insertCari(Cari c) async {
+    try {
+      final data = c.toMap();
+      data['created_at'] = DateTime.now().toIso8601String();
+      final docRef = await _db.collection('cariler').add(data);
+      return _getIntId('cariler', docRef.id);
+    } catch (e) {
+      print('insertCari error: $e');
+      return -1;
+    }
+  }
+
+  Future<List<Cari>> getCariler() async {
+    try {
+      final snapshot = await _db.collection('cariler').get();
+      final hareketler = await getKasaHareketleri();
+      final anlasmaSnapshot = await _db.collection('cari_anlasmalar').get();
+      
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = _getIntId('cariler', doc.id);
+        final cari = Cari.fromMap(data);
+        if (!(cari.aktif)) return null;
+        
+        final cariId = cari.id!;
+        
+        // Anlaşmalardan borç ve alacak toplamlarını hesapla
+        double toplamBorc = 0;
+        double toplamAlacak = 0;
+        for (final aDoc in anlasmaSnapshot.docs) {
+          final aData = Map<String, dynamic>.from(aDoc.data());
+          aData['id'] = _getIntId('cari_anlasmalar', aDoc.id);
+          final a = CariAnlasma.fromMap(aData);
+          if (a.cariId == cariId && a.aktif) {
+            if (a.tip == 'borc') {
+              toplamBorc += a.tutar;
+            } else {
+              toplamAlacak += a.tutar;
+            }
+          }
+        }
+        
+        // Kasa hareketlerinden ödeme ve tahsilat toplamlarını hesapla
+        double toplamOdenen = 0;
+        double toplamTahsilat = 0;
+        for (final h in hareketler) {
+          if (h.iliskiliId == cariId) {
+            if (h.islemKaynagi == 'cari_odeme') {
+              toplamOdenen += h.tlKarsiligi ?? h.tutar;
+            } else if (h.islemKaynagi == 'cari_tahsilat') {
+              toplamTahsilat += h.tlKarsiligi ?? h.tutar;
+            }
+          }
+        }
+        
+        return cari.copyWith(
+          toplamBorc: toplamBorc,
+          toplamOdenen: toplamOdenen,
+          toplamAlacak: toplamAlacak,
+          toplamTahsilat: toplamTahsilat,
+        );
+      }).whereType<Cari>().toList();
+    } catch (e) {
+      print('getCariler error: $e');
+      return [];
+    }
+  }
+
+  Future<int> updateCari(Cari c) async {
+    try {
+      final docId = _getDocId('cariler', c.id!);
+      if (docId == null) return 0;
+      await _db.collection('cariler').doc(docId).update(c.toMap());
+      return 1;
+    } catch (e) {
+      print('updateCari error: $e');
+      return 0;
+    }
+  }
+
+  Future<int> deleteCari(int id) async {
+    try {
+      final docId = _getDocId('cariler', id);
+      if (docId == null) return 0;
+      await _db.collection('cariler').doc(docId).update({'aktif': false});
+      return 1;
+    } catch (e) {
+      print('deleteCari error: $e');
+      return 0;
+    }
+  }
+
+  // ==================== CARİ ANLAŞMALAR ====================
+
+  Future<int> insertCariAnlasma(CariAnlasma a) async {
+    try {
+      final docRef = await _db.collection('cari_anlasmalar').add(a.toMap());
+      return _getIntId('cari_anlasmalar', docRef.id);
+    } catch (e) {
+      print('insertCariAnlasma error: $e');
+      return -1;
+    }
+  }
+
+  Future<List<CariAnlasma>> getCariAnlasmalari({int? cariId}) async {
+    try {
+      final snapshot = await _db.collection('cari_anlasmalar').get();
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = _getIntId('cari_anlasmalar', doc.id);
+        return CariAnlasma.fromMap(data);
+      }).where((a) {
+        if (!a.aktif) return false;
+        if (cariId != null && a.cariId != cariId) return false;
+        return true;
+      }).toList();
+    } catch (e) {
+      print('getCariAnlasmalari error: $e');
+      return [];
     }
   }
 }

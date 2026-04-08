@@ -8,6 +8,7 @@ import '../models/musteri.dart';
 import '../models/satis.dart';
 import '../models/settings.dart';
 import '../models/yaklasan_odeme.dart';
+import '../models/cari.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -1114,6 +1115,14 @@ class DatabaseService {
       ORDER BY tarih DESC
     ''');
   }
+
+  // ==================== CARİLER (stub - native) ====================
+  Future<int> insertCari(Cari c) async => -1;
+  Future<List<Cari>> getCariler() async => [];
+  Future<int> updateCari(Cari c) async => 0;
+  Future<int> deleteCari(int id) async => 0;
+  Future<int> insertCariAnlasma(CariAnlasma a) async => -1;
+  Future<List<CariAnlasma>> getCariAnlasmalari({int? cariId}) async => [];
 
   Future<void> close() async {
     final db = await database;

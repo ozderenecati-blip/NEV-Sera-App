@@ -125,6 +125,9 @@ class KasaHareketi {
       case 'doviz_bozdurma': return '💱 Döviz Bozd.';
       case 'kasa_transfer': return '🔄 Transfer';
       case 'islem_ucreti': return '🧾 İşlem Ücreti';
+      case 'maas_odemesi': return '💰 Maaş';
+      case 'cari_odeme': return '🏢 Cari Ödeme';
+      case 'cari_tahsilat': return '🏢 Cari Tahsilat';
       default: return '💰 Kasa';
     }
   }

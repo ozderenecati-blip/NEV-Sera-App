@@ -358,15 +358,23 @@ class _KasaScreenState extends State<KasaScreen> {
                       DropdownMenuItem(value: 'kasa', child: Text('Normal')),
                       DropdownMenuItem(
                         value: 'gider_pusulasi',
-                        child: Text('Avans'),
+                        child: Text('G.P. İşlemi'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'maas_odemesi',
+                        child: Text('Maaş'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'cari_odeme',
+                        child: Text('Cari Ödeme'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'cari_tahsilat',
+                        child: Text('Cari Tahsilat'),
                       ),
                       DropdownMenuItem(
                         value: 'resmilestirme',
-                        child: Text('G. Pusulası'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'gider_pusulasi_vergi',
-                        child: Text('G.P. Vergisi'),
+                        child: Text('Resmileştirme'),
                       ),
                       DropdownMenuItem(
                         value: 'kredi_odeme',
@@ -1150,6 +1158,7 @@ class _KasaScreenState extends State<KasaScreen> {
     );
     final notlarController = TextEditingController(text: hareket?.notlar ?? '');
     final islemUcretiController = TextEditingController(text: '0');
+    final manuelKurController = TextEditingController();
 
     // İşlem modu: 'giris', 'cikis', 'doviz', 'transfer'
     String islemModu = 'cikis';
@@ -1184,9 +1193,12 @@ class _KasaScreenState extends State<KasaScreen> {
     String? selectedOdemeBicimi = hareket?.odemeBicimi;
     String selectedParaBirimi = hareket?.paraBirimi ?? 'TL';
     String hedefParaBirimi = 'TL'; // Döviz bozdurma için
+    String? dovizKaynakKasa; // Döviz bozdurma kaynak kasa
+    String? dovizHedefKasa; // Döviz bozdurma hedef kasa
     int? selectedGundelikciId = hareket?.iliskiliId;
     int? selectedKrediId; // Kredi ödemesi için
     int? selectedTaksitId; // Kredi taksiti için
+    int? selectedCariId; // Cari ödeme/tahsilat için
     DateTime selectedDate = hareket?.tarih ?? DateTime.now();
     bool islemUcretiAktif = false;
     String? fisUrl = hareket?.fisUrl; // Fiş görseli URL'si
@@ -1379,6 +1391,7 @@ class _KasaScreenState extends State<KasaScreen> {
                                           islemKaynagi = 'doviz_bozdurma';
                                           selectedParaBirimi = 'EUR';
                                           hedefParaBirimi = 'TL';
+                                          manuelKurController.text = _eurTryRate.toStringAsFixed(4);
                                         }),
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(
@@ -1488,19 +1501,36 @@ class _KasaScreenState extends State<KasaScreen> {
                                   if (islemModu == 'cikis') ...[
                                     const DropdownMenuItem(
                                       value: 'gider_pusulasi',
-                                      child: Text('Çalışan Ödemesi'),
+                                      child: Text('Gider Pusulası İşlemi'),
+                                    ),
+                                    const DropdownMenuItem(
+                                      value: 'maas_odemesi',
+                                      child: Text('Maaş Ödemesi'),
+                                    ),
+                                    const DropdownMenuItem(
+                                      value: 'cari_odeme',
+                                      child: Text('Cari Ödeme'),
                                     ),
                                     const DropdownMenuItem(
                                       value: 'kredi_odeme',
                                       child: Text('Kredi Taksit Ödemesi'),
                                     ),
                                   ],
+                                  if (islemModu == 'giris') ...[
+                                    const DropdownMenuItem(
+                                      value: 'cari_tahsilat',
+                                      child: Text('Cari Tahsilat'),
+                                    ),
+                                  ],
                                 ],
                                 onChanged:
                                     (v) => setModalState(() {
                                       islemKaynagi = v!;
-                                      if (v == 'gider_pusulasi') {
+                                      if (v == 'gider_pusulasi' || v == 'maas_odemesi' || v == 'cari_odeme') {
                                         islemTipi = 'Çıkış';
+                                      }
+                                      if (v == 'cari_tahsilat') {
+                                        islemTipi = 'Giriş';
                                       }
                                       if (v == 'kredi_odeme') {
                                         islemTipi = 'Çıkış';
@@ -1535,6 +1565,36 @@ class _KasaScreenState extends State<KasaScreen> {
                                       selectedGundelikciId = v;
                                       aciklamaController.text =
                                           'Gündelik ücreti - ${provider.gundelikciler.firstWhere((g) => g.id == v).adSoyad}';
+                                    }),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // Cari firma seçimi (cari ödeme/tahsilat)
+                            if (islemKaynagi == 'cari_odeme' || islemKaynagi == 'cari_tahsilat') ...[
+                              DropdownButtonFormField<int>(
+                                value: selectedCariId,
+                                decoration: InputDecoration(
+                                  labelText: islemKaynagi == 'cari_odeme' ? 'Ödeme Yapılacak Cari *' : 'Tahsilat Yapılacak Cari *',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.business),
+                                ),
+                                items:
+                                    provider.cariler
+                                        .map(
+                                          (c) => DropdownMenuItem(
+                                            value: c.id,
+                                            child: Text(c.firmaAdi),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged:
+                                    (v) => setModalState(() {
+                                      selectedCariId = v;
+                                      final cariAd = provider.cariler.firstWhere((c) => c.id == v).firmaAdi;
+                                      aciklamaController.text = islemKaynagi == 'cari_odeme'
+                                          ? 'Cari ödeme - $cariAd'
+                                          : 'Cari tahsilat - $cariAd';
                                     }),
                               ),
                               const SizedBox(height: 16),
@@ -1783,9 +1843,17 @@ class _KasaScreenState extends State<KasaScreen> {
                                         ),
                                       ],
                                       onChanged:
-                                          (v) => setModalState(
-                                            () => selectedParaBirimi = v!,
-                                          ),
+                                          (v) => setModalState(() {
+                                            selectedParaBirimi = v!;
+                                            // Varsayılan kuru güncelle
+                                            if (v == 'EUR') {
+                                              manuelKurController.text = _eurTryRate.toStringAsFixed(4);
+                                            } else if (v == 'USD') {
+                                              manuelKurController.text = _usdTryRate.toStringAsFixed(4);
+                                            } else {
+                                              manuelKurController.text = '';
+                                            }
+                                          }),
                                     ),
                                   ),
                                   Padding(
@@ -1830,30 +1898,66 @@ class _KasaScreenState extends State<KasaScreen> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
+                              const SizedBox(height: 12),
+
+                              // Kaynak ve Hedef Kasa seçimi
+                              if (provider.kasalar.length >= 2)
+                                Row(
                                   children: [
-                                    Icon(
-                                      Icons.info_outline,
-                                      color: Colors.orange.shade700,
-                                      size: 20,
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: dovizKaynakKasa,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Çıkış Kasası *',
+                                          border: OutlineInputBorder(),
+                                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                        ),
+                                        isExpanded: true,
+                                        items: provider.kasalar.map((k) {
+                                          final setting = provider.getKasaSetting(k);
+                                          final label = setting?.kasaGosterimAdi ?? k;
+                                          return DropdownMenuItem(value: k, child: Text(label, overflow: TextOverflow.ellipsis));
+                                        }).toList(),
+                                        onChanged: (v) => setModalState(() => dovizKaynakKasa = v),
+                                      ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Güncel Kur: 1 EUR = ${_eurTryRate.toStringAsFixed(2)} TL, 1 USD = ${_usdTryRate.toStringAsFixed(2)} TL',
-                                      style: TextStyle(
-                                        color: Colors.orange.shade700,
-                                        fontSize: 12,
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Icon(Icons.arrow_forward, color: Colors.orange),
+                                    ),
+                                    Expanded(
+                                      child: DropdownButtonFormField<String>(
+                                        value: dovizHedefKasa,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Giriş Kasası *',
+                                          border: OutlineInputBorder(),
+                                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                                        ),
+                                        isExpanded: true,
+                                        items: provider.kasalar.map((k) {
+                                          final setting = provider.getKasaSetting(k);
+                                          final label = setting?.kasaGosterimAdi ?? k;
+                                          return DropdownMenuItem(value: k, child: Text(label, overflow: TextOverflow.ellipsis));
+                                        }).toList(),
+                                        onChanged: (v) => setModalState(() => dovizHedefKasa = v),
                                       ),
                                     ),
                                   ],
                                 ),
+                              const SizedBox(height: 12),
+
+                              // Manuel kur girişi
+                              TextField(
+                                controller: manuelKurController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Kur (1 $selectedParaBirimi = ? ${hedefParaBirimi})',
+                                  border: const OutlineInputBorder(),
+                                  prefixIcon: const Icon(Icons.currency_exchange),
+                                  helperText: 'API kuru: 1 EUR = ${_eurTryRate.toStringAsFixed(2)} TL, 1 USD = ${_usdTryRate.toStringAsFixed(2)} TL',
+                                  helperMaxLines: 2,
+                                ),
+                                onChanged: (_) => setModalState(() {}),
                               ),
                               const SizedBox(height: 16),
                             ],
@@ -2350,6 +2454,10 @@ class _KasaScreenState extends State<KasaScreen> {
                                           selectedGundelikciId,
                                       selectedKrediId: selectedKrediId,
                                       selectedTaksitId: selectedTaksitId,
+                                      selectedCariId: selectedCariId,
+                                      dovizKaynakKasa: dovizKaynakKasa,
+                                      dovizHedefKasa: dovizHedefKasa,
+                                      manuelKurController: manuelKurController,
                                       selectedDate: selectedDate,
                                       islemUcretiAktif: islemUcretiAktif,
                                       fisUrl: fisUrl,
@@ -2397,6 +2505,10 @@ class _KasaScreenState extends State<KasaScreen> {
     int? selectedGundelikciId,
     int? selectedKrediId,
     int? selectedTaksitId,
+    int? selectedCariId,
+    String? dovizKaynakKasa,
+    String? dovizHedefKasa,
+    TextEditingController? manuelKurController,
     required DateTime selectedDate,
     required bool islemUcretiAktif,
     String? fisUrl,
@@ -2509,25 +2621,34 @@ class _KasaScreenState extends State<KasaScreen> {
 
     // Döviz bozdurma işlemi
     if (islemModu == 'doviz') {
-      final kur = selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate;
-      final hedefKur =
-          hedefParaBirimi == 'EUR'
-              ? _eurTryRate
-              : hedefParaBirimi == 'USD'
-              ? _usdTryRate
-              : 1.0;
-      final tlTutar = tutar * kur;
-      final hedefTutar = tlTutar / hedefKur;
+      // Manuel kur kontrolü
+      final manuelKur = double.tryParse(manuelKurController?.text.replaceAll(',', '.') ?? '');
+      if (manuelKur == null || manuelKur <= 0) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Geçerli bir kur değeri girin')),
+        );
+        return;
+      }
+
+      final hedefTutar = tutar * manuelKur;
+      final tlTutar = selectedParaBirimi == 'TL'
+          ? tutar
+          : hedefParaBirimi == 'TL'
+          ? hedefTutar
+          : tutar * (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate);
+
+      final kaynakKasa = dovizKaynakKasa ?? selectedKasa;
+      final hedefKasaVal = dovizHedefKasa ?? selectedKasa;
 
       // Çıkış (satılan döviz)
       final cikis = KasaHareketi(
         tarih: selectedDate,
         islemTipi: 'Çıkış',
         tutar: tutar,
-        aciklama: 'Döviz Bozdurma: $selectedParaBirimi → $hedefParaBirimi',
-        kasa: selectedKasa,
+        aciklama: 'Döviz Bozdurma: $selectedParaBirimi → $hedefParaBirimi (Kur: ${manuelKur.toStringAsFixed(4)})',
+        kasa: kaynakKasa,
         paraBirimi: selectedParaBirimi,
-        dovizKuru: kur,
+        dovizKuru: manuelKur,
         tlKarsiligi: tlTutar,
         islemKaynagi: 'doviz_bozdurma',
       );
@@ -2538,10 +2659,10 @@ class _KasaScreenState extends State<KasaScreen> {
         tarih: selectedDate,
         islemTipi: 'Giriş',
         tutar: hedefTutar,
-        aciklama: 'Döviz Bozdurma: $selectedParaBirimi → $hedefParaBirimi',
-        kasa: selectedKasa,
+        aciklama: 'Döviz Bozdurma: $selectedParaBirimi → $hedefParaBirimi (Kur: ${manuelKur.toStringAsFixed(4)})',
+        kasa: hedefKasaVal,
         paraBirimi: hedefParaBirimi,
-        dovizKuru: hedefKur,
+        dovizKuru: manuelKur,
         tlKarsiligi: tlTutar,
         islemKaynagi: 'doviz_bozdurma',
       );
@@ -2571,7 +2692,11 @@ class _KasaScreenState extends State<KasaScreen> {
       iliskiliId:
           islemKaynagi == 'gider_pusulasi'
               ? selectedGundelikciId
-              : (islemKaynagi == 'kredi_odeme' ? selectedTaksitId : null),
+              : islemKaynagi == 'kredi_odeme'
+              ? selectedTaksitId
+              : (islemKaynagi == 'cari_odeme' || islemKaynagi == 'cari_tahsilat')
+              ? selectedCariId
+              : null,
       fisUrl: fisUrl,
     );
 

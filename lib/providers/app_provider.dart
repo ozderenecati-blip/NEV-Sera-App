@@ -7,6 +7,7 @@ import '../models/settings.dart';
 import '../models/yaklasan_odeme.dart';
 import '../models/musteri.dart';
 import '../models/satis.dart';
+import '../models/cari.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
 
@@ -39,8 +40,13 @@ class AppProvider extends ChangeNotifier {
   List<Satis> _satislar = [];
   Map<String, dynamic> _cariOzet = {};
 
+  // Cariler (Tedarikçi borç-alacak)
+  List<Cari> _cariler = [];
+  List<CariAnlasma> _cariAnlasmalari = [];
+
   // Ayarlar
   List<String> _kasalar = [];
+  List<AppSettings> _kasaSettings = [];
 
   // Raporlar
   List<Map<String, dynamic>> _aylikRapor = [];
@@ -65,7 +71,10 @@ class AppProvider extends ChangeNotifier {
   List<Musteri> get musteriler => _musteriler;
   List<Satis> get satislar => _satislar;
   Map<String, dynamic> get cariOzet => _cariOzet;
+  List<Cari> get cariler => _cariler;
+  List<CariAnlasma> get cariAnlasmalari => _cariAnlasmalari;
   List<String> get kasalar => _kasalar;
+  List<AppSettings> get kasaSettings => _kasaSettings;
   List<Map<String, dynamic>> get aylikRapor => _aylikRapor;
   List<Map<String, dynamic>> get kategoriRapor => _kategoriRapor;
   List<Map<String, dynamic>> get kasaBazliRapor => _kasaBazliRapor;
@@ -95,6 +104,9 @@ class AppProvider extends ChangeNotifier {
     try { _satislar = await _db.getSatislar(); } catch (e) { errors.add('Satış: $e'); }
     try { _cariOzet = await _db.getCariOzet(); } catch (e) { errors.add('Cari: $e'); }
     try { _kasalar = await _db.getSettingValues('kasa'); } catch (e) { errors.add('Ayar: $e'); }
+    try { _kasaSettings = await _db.getSettings('kasa'); } catch (e) { errors.add('KasaS: $e'); }
+    try { _cariler = await _db.getCariler(); } catch (e) { errors.add('Cari: $e'); }
+    try { _cariAnlasmalari = await _db.getCariAnlasmalari(); } catch (e) { errors.add('CariA: $e'); }
     try { _kategoriRapor = await _db.getKategoriBazliRapor(); } catch (e) { errors.add('Rapor: $e'); }
     try { _aylikRapor = await _db.getAylikHarcamaRaporu(DateTime.now().year); } catch (e) { errors.add('Aylık: $e'); }
     try { _kasaBazliRapor = await _db.getKasaBazliRapor(); } catch (e) { errors.add('KasaR: $e'); }
@@ -141,6 +153,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> loadSettings() async {
     try {
       _kasalar = await _db.getSettingValues('kasa');
+      _kasaSettings = await _db.getSettings('kasa');
     } catch (e) {
       _error = 'Ayarlar yüklenirken hata: $e';
     }
@@ -278,44 +291,25 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// Gider pusulası kes - resmileştirme + vergi
-  /// Avans olarak verilen para zaten kasadan çıkmıştı, şimdi sadece:
-  /// 1. Resmileştirme kaydı (borcu kapatır, kasadan çıkış yok)
-  /// 2. Vergi ödemesi (kasadan çıkış)
+  /// Gider pusulası kes - sadece kayıt, kasaya etki etmez
   Future<bool> giderPusulasiKes({
     required Gundelikci gundelikci,
-    required double brutTutar, // Gider pusulası brüt tutar
-    required double vergiTutari, // Ödenecek vergi
+    required double brutTutar,
     required DateTime tarih,
     String? aciklama,
-    String? kasa, // Vergi hangi kasadan ödenecek
   }) async {
     try {
-      // 1. Resmileştirme kaydı - borcu kapatır (kasadan çıkış YOK, sadece kayıt)
+      // Resmileştirme kaydı - borcu kapatır (kasadan çıkış YOK, sadece kayıt)
       final resmilestirme = KasaHareketi(
         tarih: tarih,
         aciklama: aciklama ?? 'Gider Pusulası - ${gundelikci.adSoyad}',
-        islemTipi: 'Kayıt', // Kasadan çıkış değil, sadece borç kapatma kaydı
+        islemTipi: 'Kayıt',
         tutar: brutTutar,
-        kasa: null, // Kasadan işlem yok
+        kasa: null,
         islemKaynagi: 'resmilestirme',
         iliskiliId: gundelikci.id,
       );
       await _db.insertKasaHareketi(resmilestirme);
-
-      // 2. Vergi ödemesi - kasadan çıkış
-      if (vergiTutari > 0 && kasa != null) {
-        final vergi = KasaHareketi(
-          tarih: tarih,
-          aciklama: 'Gider Pusulası Vergisi - ${gundelikci.adSoyad}',
-          islemTipi: 'Çıkış',
-          tutar: vergiTutari,
-          kasa: kasa,
-          islemKaynagi: 'gider_pusulasi_vergi',
-          iliskiliId: gundelikci.id,
-        );
-        await _db.insertKasaHareketi(vergi);
-      }
 
       await loadKasaHareketleri();
       await loadGundelikciler();
@@ -529,14 +523,11 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  /// Ortak ödemesini stopajlı resmileştir
-  /// Brüt tutar üzerinden stopaj kesilir, net tutar ödenir
-  /// Bu işlem borcu kapatır ve stopaj kaydı oluşturur
+  /// Ortak borç kapatma (stopajsız)
+  /// Tutar kadar kasadan çıkış yapılır ve borç düşürülür
   Future<bool> ortakOdemesiResmilestir({
     required Ortak ortak,
-    required double brutTutar,       // Resmileştirilecek brüt tutar
-    required double stopajTutari,    // Kesilecek stopaj
-    required double netOdeme,        // Ortağa ödenecek net tutar
+    required double tutar,
     required String kasa,
     required DateTime tarih,
     String paraBirimi = 'TL',
@@ -544,44 +535,20 @@ class AppProvider extends ChangeNotifier {
     String? aciklama,
   }) async {
     try {
-      final tlKarsiligistopaj = paraBirimi != 'TL' && dovizKuru != null 
-          ? stopajTutari * dovizKuru 
-          : null;
-      final tlKarsiliginet = paraBirimi != 'TL' && dovizKuru != null 
-          ? netOdeme * dovizKuru 
-          : null;
-
-      // 1. Geri ödeme kaydı (net tutar - ortağa ödenen)
+      // Geri ödeme kaydı - kasadan çıkış, borç düşer
       final geriOdeme = KasaHareketi(
         tarih: tarih,
-        aciklama: aciklama ?? 'Ortak Geri Ödeme (Net) - ${ortak.adSoyad}',
+        aciklama: aciklama ?? 'Ortak Borç Kapatma - ${ortak.adSoyad}',
         islemTipi: 'Çıkış',
-        tutar: netOdeme,
+        tutar: tutar,
         paraBirimi: paraBirimi,
         dovizKuru: dovizKuru,
-        tlKarsiligi: tlKarsiliginet,
+        tlKarsiligi: paraBirimi != 'TL' && dovizKuru != null ? tutar * dovizKuru : null,
         kasa: kasa,
         islemKaynagi: 'ortak_geri_odeme',
         iliskiliId: ortak.id,
       );
       await _db.insertKasaHareketi(geriOdeme);
-
-      // 2. Stopaj kaydı (vergi olarak kesilen, borcu azaltır)
-      if (stopajTutari > 0) {
-        final stopaj = KasaHareketi(
-          tarih: tarih,
-          aciklama: 'Ortak Stopaj (%${ortak.stopajOrani.toStringAsFixed(0)}) - ${ortak.adSoyad}',
-          islemTipi: 'Kayıt', // Kasadan çıkış yok, sadece borç düşer
-          tutar: stopajTutari,
-          paraBirimi: paraBirimi,
-          dovizKuru: dovizKuru,
-          tlKarsiligi: tlKarsiligistopaj,
-          kasa: null,
-          islemKaynagi: 'ortak_stopaj',
-          iliskiliId: ortak.id,
-        );
-        await _db.insertKasaHareketi(stopaj);
-      }
 
       await loadKasaHareketleri();
       await loadOrtaklar();
@@ -598,6 +565,18 @@ class AppProvider extends ChangeNotifier {
   Future<bool> addSetting(String tip, String deger) async {
     try {
       await _db.insertSetting(AppSettings(tip: tip, deger: deger));
+      await loadSettings();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> addSettingFull(AppSettings setting) async {
+    try {
+      await _db.insertSetting(setting);
       await loadSettings();
       return true;
     } catch (e) {
@@ -665,6 +644,71 @@ class AppProvider extends ChangeNotifier {
     final kasa = kasalar.where((k) => k.deger == kasaAdi).firstOrNull;
     if (kasa?.ortakId == null) return null;
     return await _db.getOrtakById(kasa!.ortakId!);
+  }
+
+  // ==================== CARİLER ====================
+
+  Future<void> loadCariler() async {
+    try {
+      _cariler = await _db.getCariler();
+      _cariAnlasmalari = await _db.getCariAnlasmalari();
+    } catch (e) {
+      _error = 'Cariler yüklenirken hata: $e';
+    }
+    notifyListeners();
+  }
+
+  Future<bool> addCari(Cari cari) async {
+    try {
+      await _db.insertCari(cari);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateCari(Cari cari) async {
+    try {
+      await _db.updateCari(cari);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteCari(int id) async {
+    try {
+      await _db.deleteCari(id);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> addCariAnlasma(CariAnlasma anlasma) async {
+    try {
+      await _db.insertCariAnlasma(anlasma);
+      await loadCariler();
+      return true;
+    } catch (e) {
+      _error = 'Hata: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Belirli bir kasa setting'ini bul (para birimi bilgisi için)
+  AppSettings? getKasaSetting(String kasaAdi) {
+    return _kasaSettings.where((k) => k.deger == kasaAdi).firstOrNull;
   }
 
   // ==================== YAKLAŞAN ÖDEMELER ====================

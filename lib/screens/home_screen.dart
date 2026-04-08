@@ -14,6 +14,7 @@ import 'gider_pusulasi_screen.dart';
 import 'ortaklar_screen.dart';
 import 'musteriler_screen.dart';
 import 'vergi_rapor_screen.dart';
+import 'cari_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const KasaScreen(),
       const GiderPusulasiScreen(),
       const OrtaklarScreen(),
+      const CariScreen(),
     ];
 
     return Scaffold(
@@ -134,6 +136,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.people_outlined, size: 24),
                 selectedIcon: Icon(Icons.people, size: 24, color: ThemeProvider.primaryColor),
                 label: 'Ortaklar',
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.business_center_outlined, size: 24),
+                selectedIcon: Icon(Icons.business_center, size: 24, color: ThemeProvider.primaryColor),
+                label: 'Cariler',
               ),
             ],
           ),

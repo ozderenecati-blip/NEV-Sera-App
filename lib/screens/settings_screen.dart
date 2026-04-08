@@ -244,96 +244,116 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
   
   void _showAddKasaDialog() {
-    final controller = TextEditingController();
+    final nameController = TextEditingController();
     int? selectedOrtakId;
     String selectedParaBirimi = 'TL';
     final provider = Provider.of<AppProvider>(context, listen: false);
     final ortaklar = provider.ortaklar;
+    bool isSaving = false;
     
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Yeni Kasa Ekle'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Kasa Adı',
-                  hintText: 'Örn: NEV EUR, Mert USD, Nev Seracılık',
-                ),
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedParaBirimi,
-                decoration: const InputDecoration(
-                  labelText: 'Para Birimi',
-                  prefixIcon: Icon(Icons.currency_exchange),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
-                  DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
-                  DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
-                ],
-                onChanged: (v) => setDialogState(() => selectedParaBirimi = v!),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<int?>(
-                value: selectedOrtakId,
-                decoration: const InputDecoration(
-                  labelText: 'Bağlı Ortak/Şahıs',
-                  prefixIcon: Icon(Icons.person),
-                ),
-                items: [
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('Seçiniz (Şirket kasası)'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Kasa Adı *',
+                    hintText: 'Örn: NEV EUR, Mert USD',
+                    border: OutlineInputBorder(),
                   ),
-                  ...ortaklar.map((ortak) => DropdownMenuItem<int?>(
-                    value: ortak.id,
-                    child: Text(ortak.adSoyad),
-                  )),
-                ],
-                onChanged: (value) {
-                  setDialogState(() {
-                    selectedOrtakId = value;
-                  });
-                },
-              ),
-            ],
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedParaBirimi,
+                  decoration: const InputDecoration(
+                    labelText: 'Para Birimi',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.currency_exchange),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
+                    DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
+                    DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
+                  ],
+                  onChanged: (v) => setDialogState(() => selectedParaBirimi = v!),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int?>(
+                  value: selectedOrtakId,
+                  decoration: const InputDecoration(
+                    labelText: 'Bağlı Ortak/Şahıs',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Seçiniz (Şirket kasası)'),
+                    ),
+                    ...ortaklar.map((ortak) => DropdownMenuItem<int?>(
+                      value: ortak.id,
+                      child: Text(ortak.adSoyad),
+                    )),
+                  ],
+                  onChanged: (v) => setDialogState(() => selectedOrtakId = v),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('İptal'),
             ),
             FilledButton(
-              onPressed: () async {
-                if (controller.text.trim().isNotEmpty) {
+              onPressed: isSaving ? null : () async {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Kasa adı giriniz'), backgroundColor: Colors.orange),
+                  );
+                  return;
+                }
+                setDialogState(() => isSaving = true);
+                try {
                   final setting = AppSettings(
                     tip: 'kasa',
-                    deger: controller.text.trim(),
+                    deger: name,
                     ortakId: selectedOrtakId,
                     paraBirimi: selectedParaBirimi,
                   );
                   final success = await provider.addSettingFull(setting);
-                  if (dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                  if (!success && mounted) {
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (success && mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Kasa eklenirken hata: ${provider.error}'),
-                        backgroundColor: Colors.red,
-                      ),
+                      SnackBar(content: Text('"$name" kasası eklendi ✓'), backgroundColor: Colors.green),
+                    );
+                  } else if (!success && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Hata: ${provider.error}'), backgroundColor: Colors.red),
                     );
                   }
+                } catch (e) {
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Kasa eklenemedi: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                } finally {
+                  if (ctx.mounted) setDialogState(() => isSaving = false);
                 }
               },
-              child: const Text('Ekle'),
+              child: isSaving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Ekle'),
             ),
           ],
         ),

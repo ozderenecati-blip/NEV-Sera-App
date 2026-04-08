@@ -30,6 +30,19 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _selectedIndex = index;
     });
+    // Tab geçişinde ilgili verileri yenile
+    final provider = context.read<AppProvider>();
+    switch (index) {
+      case 0: // Dashboard
+        provider.loadCariler();
+        break;
+      case 2: // Kasa
+        provider.loadKasaHareketleri();
+        break;
+      case 4: // Cariler
+        provider.loadCariler();
+        break;
+    }
   }
 
   @override
@@ -74,9 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
             selectedIndex: _selectedIndex,
             onDestinationSelected: (index) {
               HapticHelper.lightTap();
-              setState(() {
-                _selectedIndex = index;
-              });
+              _navigateToTab(index);
             },
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             height: 70,

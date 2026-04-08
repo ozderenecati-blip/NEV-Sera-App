@@ -207,6 +207,9 @@ class AppProvider extends ChangeNotifier {
     try {
       await _db.updateKasaHareketi(hareket);
       await loadKasaHareketleri();
+      if (hareket.islemKaynagi == 'cari_odeme' || hareket.islemKaynagi == 'cari_tahsilat') {
+        await loadCariler();
+      }
       return true;
     } catch (e) {
       _error = 'Hata: $e';
@@ -220,6 +223,7 @@ class AppProvider extends ChangeNotifier {
       await _db.deleteKasaHareketi(id);
       await loadKasaHareketleri();
       await loadGundelikciler();
+      await loadCariler();
       return true;
     } catch (e) {
       _error = 'Hata: $e';

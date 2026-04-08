@@ -341,11 +341,15 @@ class DatabaseService {
   Future<List<Kredi>> getKrediler() async {
     try {
       final snapshot = await _db.collection('krediler').get();
-      return snapshot.docs.map((doc) {
+      List<Kredi> result = [];
+      for (var doc in snapshot.docs) {
         final data = Map<String, dynamic>.from(doc.data());
-        data['id'] = _getIntId('krediler', doc.id);
-        return Kredi.fromMap(data);
-      }).toList();
+        final krediIntId = _getIntId('krediler', doc.id);
+        data['id'] = krediIntId;
+        final taksitler = await getTaksitler(krediIntId);
+        result.add(Kredi.fromMap(data, taksitler: taksitler));
+      }
+      return result;
     } catch (e) {
       print('getKrediler error: $e');
       return [];

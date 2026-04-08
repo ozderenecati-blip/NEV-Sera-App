@@ -17,7 +17,7 @@ class DatabaseService {
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
 
-  // Firebase doc.id -> int id mapping (hashCode çakışmasını önlemek için)
+  // Firebase doc.id -> int id mapping (deterministic - doc ID bazlı)
   final Map<String, Map<int, String>> _idMaps = {
     'kasa_hareketleri': {},
     'gundelikciler': {},
@@ -32,25 +32,54 @@ class DatabaseService {
     'cariler': {},
     'cari_anlasmalar': {},
   };
-  
-  int _autoId = 1;
-  
+
+  /// Firestore doc.id'den deterministic int ID üretir.
+  /// Aynı docId her zaman aynı int'i döndürür (sayfa yenilense bile).
   int _getIntId(String collection, String docId) {
-    // Eğer bu docId için zaten bir int id varsa, onu döndür
     final map = _idMaps[collection]!;
+    // Zaten map'te varsa döndür
     for (var entry in map.entries) {
       if (entry.value == docId) {
         return entry.key;
       }
     }
-    // Yoksa yeni bir id ata
-    final newId = _autoId++;
-    map[newId] = docId;
-    return newId;
+    // Deterministic: docId'nin karakter kodlarından stabil hash üret
+    int hash = 0;
+    for (int i = 0; i < docId.length; i++) {
+      hash = ((hash << 5) - hash + docId.codeUnitAt(i)) & 0x7FFFFFFF;
+    }
+    // Çakışma varsa +1 ile ilerle
+    while (map.containsKey(hash)) {
+      hash = (hash + 1) & 0x7FFFFFFF;
+    }
+    map[hash] = docId;
+    return hash;
   }
-  
+
   String? _getDocId(String collection, int intId) {
     return _idMaps[collection]?[intId];
+  }
+
+  /// İşlem kaynağına göre ilişkili koleksiyonu tahmin et
+  String _guessCollection(String? islemKaynagi) {
+    switch (islemKaynagi) {
+      case 'gider_pusulasi':
+      case 'resmilestirme':
+      case 'gider_pusulasi_vergi':
+      case 'maas_odemesi':
+        return 'gundelikciler';
+      case 'kredi_odeme':
+        return 'krediler';
+      case 'ortak_avans':
+      case 'ortak_geri_odeme':
+      case 'ortak_stopaj':
+        return 'ortaklar';
+      case 'cari_odeme':
+      case 'cari_tahsilat':
+        return 'cariler';
+      default:
+        return '';
+    }
   }
 
   // ==================== KASA ====================
@@ -69,6 +98,7 @@ class DatabaseService {
         'tl_karsiligi': hareket.tlKarsiligi,
         'islem_kaynagi': hareket.islemKaynagi,
         'iliskili_id': hareket.iliskiliId,
+        'iliskili_doc_id': hareket.iliskiliId != null ? _getDocId(_guessCollection(hareket.islemKaynagi), hareket.iliskiliId!) : null,
         'fis_url': hareket.fisUrl,
       });
       return _getIntId('kasa_hareketleri', docRef.id);
@@ -84,6 +114,14 @@ class DatabaseService {
       List<KasaHareketi> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('kasa_hareketleri', doc.id);
+        // iliskili_doc_id varsa, onu kullanarak stabil int ID'ye çevir
+        final iliskiliDocId = data['iliskili_doc_id'] as String?;
+        if (iliskiliDocId != null && iliskiliDocId.isNotEmpty) {
+          final col = _guessCollection(data['islem_kaynagi'] as String?);
+          if (col.isNotEmpty) {
+            data['iliskili_id'] = _getIntId(col, iliskiliDocId);
+          }
+        }
         return KasaHareketi.fromMap(data);
       }).toList();
       
@@ -328,10 +366,12 @@ class DatabaseService {
       
       await _db.collection('krediler').doc(docId).delete();
       // Taksitleri de sil (kredi_db_id ile kayıtlı olanları)
+      final krediDocIdStr = _getDocId('krediler', id);
       final taksitSnapshot = await _db.collection('kredi_taksitleri').get();
       for (var t in taksitSnapshot.docs) {
         final data = t.data();
-        if (data['kredi_db_id'] == id) {
+        final tKrediDocId = data['kredi_doc_id'] as String?;
+        if (tKrediDocId == krediDocIdStr || data['kredi_db_id'] == id) {
           await t.reference.delete();
         }
       }
@@ -346,10 +386,12 @@ class DatabaseService {
   Future<void> saveTaksitler(int krediDbId, List<KrediTaksit> taksitler) async {
     try {
       // Önce mevcut taksitleri sil
+      final krediDocIdStr = _getDocId('krediler', krediDbId);
       final snapshot = await _db.collection('kredi_taksitleri').get();
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        if (data['kredi_db_id'] == krediDbId) {
+        final dKrediDocId = data['kredi_doc_id'] as String?;
+        if (dKrediDocId == krediDocIdStr || data['kredi_db_id'] == krediDbId) {
           await doc.reference.delete();
         }
       }
@@ -357,6 +399,7 @@ class DatabaseService {
       for (var t in taksitler) {
         final map = t.toMap();
         map['kredi_db_id'] = krediDbId;
+        map['kredi_doc_id'] = _getDocId('krediler', krediDbId);
         await _db.collection('kredi_taksitleri').add(map);
       }
     } catch (e) {
@@ -368,7 +411,14 @@ class DatabaseService {
     try {
       final snapshot = await _db.collection('kredi_taksitleri').get();
       return snapshot.docs.where((doc) {
-        return doc.data()['kredi_db_id'] == krediDbId;
+        final data = doc.data();
+        // kredi_doc_id varsa stabil karşılaştırma yap
+        final krediDocId = data['kredi_doc_id'] as String?;
+        if (krediDocId != null) {
+          final stableId = _getIntId('krediler', krediDocId);
+          return stableId == krediDbId;
+        }
+        return data['kredi_db_id'] == krediDbId;
       }).map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('kredi_taksitleri', doc.id);
@@ -1112,6 +1162,11 @@ class DatabaseService {
         for (final aDoc in anlasmaSnapshot.docs) {
           final aData = Map<String, dynamic>.from(aDoc.data());
           aData['id'] = _getIntId('cari_anlasmalar', aDoc.id);
+          // cari_doc_id varsa stabil eşleştirme yap
+          final cariDocIdRef = aData['cari_doc_id'] as String?;
+          if (cariDocIdRef != null && cariDocIdRef.isNotEmpty) {
+            aData['cari_id'] = _getIntId('cariler', cariDocIdRef);
+          }
           final a = CariAnlasma.fromMap(aData);
           if (a.cariId == cariId && a.aktif) {
             if (a.tip == 'borc') {
@@ -1176,7 +1231,10 @@ class DatabaseService {
 
   Future<int> insertCariAnlasma(CariAnlasma a) async {
     try {
-      final docRef = await _db.collection('cari_anlasmalar').add(a.toMap());
+      final map = a.toMap();
+      // cari_id'nin Firestore doc ID'sini de sakla
+      map['cari_doc_id'] = _getDocId('cariler', a.cariId);
+      final docRef = await _db.collection('cari_anlasmalar').add(map);
       return _getIntId('cari_anlasmalar', docRef.id);
     } catch (e) {
       print('insertCariAnlasma error: $e');
@@ -1215,6 +1273,11 @@ class DatabaseService {
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('cari_anlasmalar', doc.id);
+        // cari_doc_id varsa stabil int ID'ye çevir
+        final cariDocId = data['cari_doc_id'] as String?;
+        if (cariDocId != null && cariDocId.isNotEmpty) {
+          data['cari_id'] = _getIntId('cariler', cariDocId);
+        }
         return CariAnlasma.fromMap(data);
       }).where((a) {
         if (!a.aktif) return false;

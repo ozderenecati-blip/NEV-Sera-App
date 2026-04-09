@@ -313,17 +313,30 @@ class DatabaseService {
   Future<Map<String, double>> getGundelikciOzet() async {
     try {
       final gundelikciler = await getGundelikciler();
-      final hareketler = await getKasaHareketleri(islemKaynagi: 'gundelikci');
-      double toplamOdeme = 0;
+      final hareketler = await getKasaHareketleri();
+      
+      double toplamAvans = 0;       // gider_pusulasi (kasadan çıkış)
+      double toplamResmilestirme = 0; // resmilestirme (pusula kesilmiş)
+      
       for (var h in hareketler) {
-        toplamOdeme += h.tlKarsiligi ?? h.tutar;
+        final tutar = h.tlKarsiligi ?? h.tutar;
+        if (h.islemKaynagi == 'gider_pusulasi') {
+          toplamAvans += tutar;
+        } else if (h.islemKaynagi == 'resmilestirme') {
+          toplamResmilestirme += tutar;
+        }
       }
+      
+      final kalanBorc = toplamAvans - toplamResmilestirme;
+      
       return {
-        'toplamOdeme': toplamOdeme,
-        'toplamCalisan': gundelikciler.length.toDouble(),
+        'toplam_odeme': toplamAvans,
+        'toplam_resmilestirme': toplamResmilestirme,
+        'kalan_borc': kalanBorc,
+        'toplam_calisan': gundelikciler.length.toDouble(),
       };
     } catch (e) {
-      return {'toplamOdeme': 0, 'toplamCalisan': 0};
+      return {'toplam_odeme': 0, 'toplam_resmilestirme': 0, 'kalan_borc': 0, 'toplam_calisan': 0};
     }
   }
 

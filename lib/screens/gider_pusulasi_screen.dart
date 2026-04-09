@@ -192,6 +192,11 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.money_off, color: Colors.red),
+              onPressed: () => _showAvansOdeDialog(context, g, provider),
+              tooltip: 'Avans Öde',
+            ),
             if (kalanBorc > 0)
               IconButton(
                 icon: const Icon(Icons.receipt, color: Colors.purple),
@@ -448,6 +453,129 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
             child: Text(isEdit ? 'Kaydet' : 'Ekle'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAvansOdeDialog(BuildContext context, Gundelikci g, AppProvider provider) {
+    final tutarController = TextEditingController();
+    final aciklamaController = TextEditingController(text: 'Avans - \${g.adSoyad}');
+    DateTime selectedDate = DateTime.now();
+    String? selectedKasa;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Avans Öde'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '\${g.adSoyad} kişisine avans ödemesi yapılacak.\nKasadan çıkış olarak kaydedilir.',
+                            style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: tutarController,
+                    decoration: const InputDecoration(
+                      labelText: 'Tutar (₺) *',
+                      prefixIcon: Icon(Icons.attach_money),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedKasa,
+                    decoration: const InputDecoration(
+                      labelText: 'Kasa *',
+                      prefixIcon: Icon(Icons.account_balance_wallet),
+                    ),
+                    items: provider.kasalar.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(),
+                    onChanged: (v) => setState(() => selectedKasa = v),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today),
+                    title: Text(DateFormat('dd.MM.yyyy').format(selectedDate)),
+                    trailing: const Icon(Icons.edit_calendar),
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2030),
+                      );
+                      if (picked != null) setState(() => selectedDate = picked);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: aciklamaController,
+                    decoration: const InputDecoration(labelText: 'Açıklama', prefixIcon: Icon(Icons.note)),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('İptal')),
+              FilledButton.icon(
+                icon: const Icon(Icons.money_off),
+                onPressed: () async {
+                  final tutar = double.tryParse(tutarController.text.replaceAll(',', '.'));
+                  if (tutar == null || tutar <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Geçerli tutar girin'), backgroundColor: Colors.red),
+                    );
+                    return;
+                  }
+                  if (selectedKasa == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Kasa seçin'), backgroundColor: Colors.red),
+                    );
+                    return;
+                  }
+                  final success = await provider.gundelikciyeOdemeYap(
+                    gundelikci: g,
+                    tutar: tutar,
+                    kasa: selectedKasa!,
+                    tarih: selectedDate,
+                    aciklama: aciklamaController.text.trim(),
+                  );
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(success ? 'Avans ödendi' : 'Hata oluştu'),
+                        backgroundColor: success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+                label: const Text('Öde'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

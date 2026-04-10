@@ -189,6 +189,13 @@ class DatabaseService {
   Future<List<Map<String, dynamic>>> getKasaBakiyeleri() async {
     try {
       final hareketler = await getKasaHareketleri();
+      // Kasa ayarlarını çek - para birimi bilgisi için
+      final kasaSettings = await getSettings('kasa');
+      final Map<String, String> kasaParaBirimleri = {};
+      for (var s in kasaSettings) {
+        kasaParaBirimleri[s.deger] = s.paraBirimi ?? 'TL';
+      }
+
       final Map<String, Map<String, double>> bakiyeler = {};
       
       for (var h in hareketler) {
@@ -196,7 +203,8 @@ class DatabaseService {
         if (h.kasa == null || h.kasa!.isEmpty) continue;
         
         final kasa = h.kasa!;
-        final tutar = h.tlKarsiligi ?? h.tutar;
+        // Her kasanın kendi birimi cinsinden tutarı kullan (TL'ye çevirme!)
+        final tutar = h.tutar;
         bakiyeler[kasa] ??= {'bakiye': 0, 'toplam_giris': 0, 'toplam_cikis': 0};
         if (h.islemTipi == 'Giriş') {
           bakiyeler[kasa]!['bakiye'] = bakiyeler[kasa]!['bakiye']! + tutar;
@@ -212,9 +220,10 @@ class DatabaseService {
         'bakiye': e.value['bakiye'], 
         'toplam_giris': e.value['toplam_giris'],
         'toplam_cikis': e.value['toplam_cikis'],
+        'para_birimi': kasaParaBirimleri[e.key] ?? 'TL',
       }).toList();
     } catch (e) {
-      print('getKasaBakiyeleri error: $e');
+      print('getKasaBakiyeleri error: \$e');
       return [];
     }
   }

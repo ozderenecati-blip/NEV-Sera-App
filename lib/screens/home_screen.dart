@@ -1207,6 +1207,9 @@ class DashboardTab extends StatelessWidget {
                 final bakiye = (b['bakiye'] as num?)?.toDouble() ?? 0.0;
                 final giris = (b['toplam_giris'] as num?)?.toDouble() ?? 0.0;
                 final cikis = (b['toplam_cikis'] as num?)?.toDouble() ?? 0.0;
+                final paraBirimi = b['para_birimi'] as String? ?? 'TL';
+                final sembol = paraBirimi == 'EUR' ? '€' : paraBirimi == 'USD' ? '\$' : '₺';
+                final kasaFmt = NumberFormat.currency(locale: 'tr_TR', symbol: sembol);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
@@ -1248,7 +1251,7 @@ class DashboardTab extends StatelessWidget {
                               ),
                             ),
                             Text(
-                              'G: ${fmt.format(giris)} | Ç: ${fmt.format(cikis)}',
+                              'G: ${kasaFmt.format(giris)} | Ç: ${kasaFmt.format(cikis)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey.shade600,
@@ -1258,7 +1261,7 @@ class DashboardTab extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        fmt.format(bakiye),
+                        kasaFmt.format(bakiye),
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,

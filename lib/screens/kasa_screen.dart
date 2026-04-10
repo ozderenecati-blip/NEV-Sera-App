@@ -2035,44 +2035,95 @@ class _KasaScreenState extends State<KasaScreen> {
 
                             // Transfer modunda para birimi ve tutar
                             if (islemModu == 'transfer') ...[
-                              Row(
-                                children: [
-                                  SizedBox(
-                                    width: 110,
-                                    child: DropdownButtonFormField<String>(
-                                      value: selectedParaBirimi,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Birim',
-                                        border: OutlineInputBorder(),
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-                                      ),
-                                      isExpanded: true,
-                                      items: const [
-                                        DropdownMenuItem(value: 'TL', child: Text('₺ TL')),
-                                        DropdownMenuItem(value: 'EUR', child: Text('€ EUR')),
-                                        DropdownMenuItem(value: 'USD', child: Text('\$ USD')),
-                                      ],
-                                      onChanged: (v) => setModalState(() => selectedParaBirimi = v!),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextField(
+                              // Kaynak ve hedef kasaların para birimlerini bul
+                              Builder(builder: (context) {
+                                final kaynakSetting = selectedKasa != null ? provider.getKasaSetting(selectedKasa!) : null;
+                                final hedefSetting = hedefKasa != null ? provider.getKasaSetting(hedefKasa!) : null;
+                                final kaynakBirim = kaynakSetting?.paraBirimi ?? 'TL';
+                                final hedefBirim = hedefSetting?.paraBirimi ?? 'TL';
+                                final farkliDoviz = kaynakBirim != hedefBirim;
+                                final kaynakSembol = kaynakBirim == 'EUR' ? '€' : kaynakBirim == 'USD' ? '\$' : '₺';
+                                // selectedParaBirimi'yi kaynak kasadan oto ayarla
+                                if (selectedParaBirimi != kaynakBirim) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    setModalState(() => selectedParaBirimi = kaynakBirim);
+                                  });
+                                }
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    TextField(
                                       controller: tutarController,
-                                      keyboardType:
-                                          const TextInputType.numberWithOptions(
-                                            decimal: true,
-                                          ),
-                                      decoration: const InputDecoration(
-                                        labelText: 'Transfer Tutarı *',
-                                        border: OutlineInputBorder(),
-                                        prefixIcon: Icon(Icons.attach_money),
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: InputDecoration(
+                                        labelText: 'Transfer Tutarı ($kaynakBirim) *',
+                                        border: const OutlineInputBorder(),
+                                        prefixIcon: const Icon(Icons.attach_money),
+                                        suffixText: kaynakSembol,
                                       ),
                                       onChanged: (_) => setModalState(() {}),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    if (farkliDoviz) ...[
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade50,
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.orange.shade300),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.currency_exchange, color: Colors.orange.shade700, size: 20),
+                                            const SizedBox(width: 8),
+                                            Expanded(child: Text(
+                                              'Farklı döviz: $kaynakBirim → $hedefBirim. Lütfen kuru girin.',
+                                              style: TextStyle(fontSize: 13, color: Colors.orange.shade800),
+                                            )),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: manuelKurController,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        decoration: InputDecoration(
+                                          labelText: '1 $kaynakBirim = ? $hedefBirim (Manuel Kur)',
+                                          border: const OutlineInputBorder(),
+                                          prefixIcon: const Icon(Icons.price_change),
+                                        ),
+                                        onChanged: (_) => setModalState(() {}),
+                                      ),
+                                      if (manuelKurController.text.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Builder(builder: (_) {
+                                          final kur = double.tryParse(manuelKurController.text.replaceAll(',', '.')) ?? 0;
+                                          final t = double.tryParse(tutarController.text.replaceAll(',', '.')) ?? 0;
+                                          final hedefTutar = t * kur;
+                                          final hedefSembol = hedefBirim == 'EUR' ? '€' : hedefBirim == 'USD' ? '\$' : '₺';
+                                          return Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green.shade50,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                                                const SizedBox(width: 8),
+                                                Expanded(child: Text(
+                                                  'Hedef kasaya geçecek tutar: $hedefSembol${NumberFormat('#,##0.00', 'tr_TR').format(hedefTutar)}',
+                                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                                                )),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                    ],
+                                  ],
+                                );
+                              }),
                             ],
 
                             // TL Karşılığı göster
@@ -2577,40 +2628,57 @@ class _KasaScreenState extends State<KasaScreen> {
 
     // Transfer işlemi
     if (islemModu == 'transfer') {
-      // Çıkış kaydı
+      // Kaynak ve hedef kasa para birimlerini bul
+      final kaynakSetting = selectedKasa != null ? provider.getKasaSetting(selectedKasa!) : null;
+      final hedefSettingT = hedefKasa != null ? provider.getKasaSetting(hedefKasa!) : null;
+      final kaynakBirim = kaynakSetting?.paraBirimi ?? 'TL';
+      final hedefBirim = hedefSettingT?.paraBirimi ?? 'TL';
+      final farkliDoviz = kaynakBirim != hedefBirim;
+      
+      double hedefTutar = tutar;
+      double? manuelKur;
+      
+      if (farkliDoviz) {
+        // Farklı döviz - kullanıcının girdiği kur gerekli
+        manuelKur = double.tryParse(manuelKurController!.text.replaceAll(',', '.'));
+        if (manuelKur == null || manuelKur <= 0) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            const SnackBar(content: Text('Farklı döviz transferi için geçerli bir kur girin')),
+          );
+          return;
+        }
+        hedefTutar = tutar * manuelKur;
+      }
+      
+      final aciklama = aciklamaController.text.trim().isEmpty ? 'Transfer' : aciklamaController.text.trim();
+      final kurNotu = farkliDoviz ? ' (Kur: ${manuelKur!.toStringAsFixed(4)})' : '';
+      
+      // Çıkış kaydı (kaynak kasadan, kaynak birim cinsinden)
       final cikis = KasaHareketi(
         tarih: selectedDate,
         islemTipi: 'Çıkış',
         tutar: tutar,
-        aciklama:
-            '${aciklamaController.text.trim().isEmpty ? 'Transfer' : aciklamaController.text.trim()} → $hedefKasa',
+        aciklama: '$aciklama → $hedefKasa$kurNotu',
         kasa: selectedKasa,
-        notlar:
-            notlarController.text.trim().isEmpty
-                ? null
-                : notlarController.text.trim(),
-        paraBirimi: selectedParaBirimi,
-        dovizKuru: selectedParaBirimi != 'TL' ? (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
-        tlKarsiligi: selectedParaBirimi != 'TL' ? tutar * (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        notlar: notlarController.text.trim().isEmpty ? null : notlarController.text.trim(),
+        paraBirimi: kaynakBirim,
+        dovizKuru: farkliDoviz ? manuelKur : (kaynakBirim != 'TL' ? (kaynakBirim == 'EUR' ? _eurTryRate : _usdTryRate) : null),
+        tlKarsiligi: kaynakBirim != 'TL' ? tutar * (kaynakBirim == 'EUR' ? _eurTryRate : _usdTryRate) : null,
         islemKaynagi: 'kasa_transfer',
       );
       await provider.addKasaHareketi(cikis);
 
-      // Giriş kaydı
+      // Giriş kaydı (hedef kasaya, hedef birim cinsinden)
       final giris = KasaHareketi(
         tarih: selectedDate,
         islemTipi: 'Giriş',
-        tutar: tutar,
-        aciklama:
-            '${aciklamaController.text.trim().isEmpty ? 'Transfer' : aciklamaController.text.trim()} ← $selectedKasa',
+        tutar: hedefTutar,
+        aciklama: '$aciklama ← $selectedKasa$kurNotu',
         kasa: hedefKasa,
-        notlar:
-            notlarController.text.trim().isEmpty
-                ? null
-                : notlarController.text.trim(),
-        paraBirimi: selectedParaBirimi,
-        dovizKuru: selectedParaBirimi != 'TL' ? (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
-        tlKarsiligi: selectedParaBirimi != 'TL' ? tutar * (selectedParaBirimi == 'EUR' ? _eurTryRate : _usdTryRate) : null,
+        notlar: notlarController.text.trim().isEmpty ? null : notlarController.text.trim(),
+        paraBirimi: hedefBirim,
+        dovizKuru: farkliDoviz ? manuelKur : (hedefBirim != 'TL' ? (hedefBirim == 'EUR' ? _eurTryRate : _usdTryRate) : null),
+        tlKarsiligi: hedefBirim != 'TL' ? hedefTutar * (hedefBirim == 'EUR' ? _eurTryRate : _usdTryRate) : null,
         islemKaynagi: 'kasa_transfer',
       );
       await provider.addKasaHareketi(giris);
@@ -2622,7 +2690,7 @@ class _KasaScreenState extends State<KasaScreen> {
     // Döviz bozdurma işlemi
     if (islemModu == 'doviz') {
       // Manuel kur kontrolü
-      final manuelKur = double.tryParse(manuelKurController?.text.replaceAll(',', '.') ?? '');
+      final manuelKur = double.tryParse((manuelKurController?.text ?? '').replaceAll(',', '.'));
       if (manuelKur == null || manuelKur <= 0) {
         ScaffoldMessenger.of(ctx).showSnackBar(
           const SnackBar(content: Text('Geçerli bir kur değeri girin')),

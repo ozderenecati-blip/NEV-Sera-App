@@ -1087,6 +1087,11 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
     final sinirCtrl = TextEditingController(text: envanter != null ? envanter.uyariSiniri.toString() : '0');
     GubreBirim birim = envanter?.birim ?? GubreBirim.kg;
 
+    // Görsel state
+    Uint8List? pendingImageBytes;
+    String? pendingImageName;
+    final gorselNotifier = ValueNotifier<String?>(envanter?.gorselUrl);
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1114,47 +1119,111 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                 controller: sinirCtrl, keyboardType: TextInputType.number,
                 decoration: InputDecoration(labelText: 'Uyarı Sınırı', helperText: 'Stok bu değere düşünce uyarı verilir', prefixIcon: const Icon(Icons.warning_amber, color: Colors.orange), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
-              if (isEdit && envanter.id != null) ...[
-                const SizedBox(height: 14),
-                Builder(builder: (_) {
-                  final gorselNotifier = ValueNotifier<String?>(envanter.gorselUrl);
-                  return ValueListenableBuilder<String?>(
-                    valueListenable: gorselNotifier,
-                    builder: (_, gorselUrl, __) => Column(mainAxisSize: MainAxisSize.min, children: [
-                      if (gorselUrl != null && gorselUrl.isNotEmpty)
-                        Stack(children: [
-                          GestureDetector(
-                            onTap: () => _showGorselDialog(envanter.gubreAdi, gorselUrl),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.network(gorselUrl, height: 120, width: double.infinity, fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(height: 60, color: Colors.grey.shade200, child: const Center(child: Icon(Icons.broken_image)))),
-                            ),
-                          ),
-                          Positioned(top: 4, right: 4, child: GestureDetector(
-                            onTap: () async {
-                              await _service.deleteGubreGorsel(envanter.id!);
-                              gorselNotifier.value = null;
-                              _refresh();
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                              child: const Icon(Icons.close, size: 16, color: Colors.white),
-                            ),
-                          )),
-                        ]),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => _pickAndUploadGorsel(envanter.id!, setDialogState, gorselNotifier),
-                        icon: Icon(gorselUrl != null ? Icons.refresh : Icons.add_photo_alternate_outlined, size: 18),
-                        label: Text(gorselUrl != null ? 'Görseli Değiştir' : 'Referans Görsel Ekle'),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.grey.shade700, side: BorderSide(color: Colors.grey.shade300)),
+
+              // ── Görsel Alanı (hem yeni hem düzenleme) ──
+              const SizedBox(height: 14),
+              ValueListenableBuilder<String?>(
+                valueListenable: gorselNotifier,
+                builder: (_, gorselUrl, __) => Column(mainAxisSize: MainAxisSize.min, children: [
+                  // Mevcut görsel önizleme (düzenleme modunda URL'den, yeni modda bellekten)
+                  if (gorselUrl != null && gorselUrl.isNotEmpty)
+                    Stack(children: [
+                      GestureDetector(
+                        onTap: () => _showGorselDialog(isEdit ? envanter.gubreAdi : gubreCtrl.text, gorselUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.network(gorselUrl, height: 120, width: double.infinity, fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(height: 60, color: Colors.grey.shade200, child: const Center(child: Icon(Icons.broken_image)))),
+                        ),
                       ),
+                      Positioned(top: 4, right: 4, child: GestureDetector(
+                        onTap: () async {
+                          if (isEdit && envanter.id != null) {
+                            await _service.deleteGubreGorsel(envanter.id!);
+                          }
+                          pendingImageBytes = null;
+                          pendingImageName = null;
+                          gorselNotifier.value = null;
+                          if (isEdit) _refresh();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                        ),
+                      )),
                     ]),
-                  );
-                }),
-              ],
+                  if (pendingImageBytes != null && (gorselUrl == null || gorselUrl.isEmpty))
+                    Stack(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.memory(pendingImageBytes!, height: 120, width: double.infinity, fit: BoxFit.cover),
+                      ),
+                      Positioned(top: 4, right: 4, child: GestureDetector(
+                        onTap: () {
+                          pendingImageBytes = null;
+                          pendingImageName = null;
+                          setDialogState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, size: 16, color: Colors.white),
+                        ),
+                      )),
+                    ]),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      if (isEdit && envanter.id != null) {
+                        // Düzenleme modunda direkt yükle
+                        await _pickAndUploadGorsel(envanter.id!, setDialogState, gorselNotifier);
+                      } else {
+                        // Yeni ekleme modunda bellekte tut
+                        final picker = ImagePicker();
+                        XFile? picked;
+                        if (kIsWeb) {
+                          picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 70);
+                        } else {
+                          final source = await showDialog<ImageSource>(
+                            context: context,
+                            builder: (ctx2) => AlertDialog(
+                              title: const Text('Görsel Kaynağı'),
+                              content: Column(mainAxisSize: MainAxisSize.min, children: [
+                                ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () => Navigator.pop(ctx2, ImageSource.camera)),
+                                ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () => Navigator.pop(ctx2, ImageSource.gallery)),
+                              ]),
+                            ),
+                          );
+                          if (source == null) return;
+                          picked = await picker.pickImage(source: source, maxWidth: 800, imageQuality: 70);
+                        }
+                        if (picked == null) return;
+                        final bytes = await picked.readAsBytes();
+                        if (bytes.length > 2 * 1024 * 1024) {
+                          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Görsel çok büyük (max 2MB)'), backgroundColor: Colors.red));
+                          return;
+                        }
+                        pendingImageBytes = bytes;
+                        pendingImageName = picked.name;
+                        setDialogState(() {});
+                      }
+                    },
+                    icon: Icon(
+                      (gorselUrl != null && gorselUrl.isNotEmpty) || pendingImageBytes != null
+                          ? Icons.refresh
+                          : Icons.add_photo_alternate_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      (gorselUrl != null && gorselUrl.isNotEmpty) || pendingImageBytes != null
+                          ? 'Görseli Değiştir'
+                          : 'Referans Görsel Ekle',
+                    ),
+                    style: OutlinedButton.styleFrom(foregroundColor: Colors.grey.shade700, side: BorderSide(color: Colors.grey.shade300)),
+                  ),
+                ]),
+              ),
             ]),
           ),
           actions: [
@@ -1169,7 +1238,11 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                   if (isEdit) {
                     await _service.updateEnvanter(envanter.copyWith(miktar: miktar, uyariSiniri: sinir));
                   } else {
-                    await _service.addEnvanter(GubreEnvanter(bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!, gubreAdi: gubreCtrl.text.trim(), miktar: miktar, birim: birim, uyariSiniri: sinir));
+                    final newId = await _service.addEnvanter(GubreEnvanter(bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!, gubreAdi: gubreCtrl.text.trim(), miktar: miktar, birim: birim, uyariSiniri: sinir));
+                    // Yeni ekleme + bekleyen görsel varsa yükle
+                    if (newId != null && pendingImageBytes != null && pendingImageName != null) {
+                      await _service.uploadGubreGorsel(newId, pendingImageBytes!, pendingImageName!);
+                    }
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
                   _refresh();

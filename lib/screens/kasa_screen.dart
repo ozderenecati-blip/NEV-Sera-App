@@ -1568,7 +1568,8 @@ class _KasaScreenState extends State<KasaScreen> {
                                   prefixIcon: Icon(Icons.person),
                                 ),
                                 items:
-                                    provider.gundelikciler
+                                    ([...provider.gundelikciler]
+                                      ..sort((a, b) => a.adSoyad.toLowerCase().compareTo(b.adSoyad.toLowerCase())))
                                         .map(
                                           (g) => DropdownMenuItem(
                                             value: g.id,
@@ -1596,7 +1597,8 @@ class _KasaScreenState extends State<KasaScreen> {
                                   prefixIcon: const Icon(Icons.business),
                                 ),
                                 items:
-                                    provider.cariler
+                                    ([...provider.cariler]
+                                      ..sort((a, b) => a.firmaAdi.toLowerCase().compareTo(b.firmaAdi.toLowerCase())))
                                         .map(
                                           (c) => DropdownMenuItem(
                                             value: c.id,

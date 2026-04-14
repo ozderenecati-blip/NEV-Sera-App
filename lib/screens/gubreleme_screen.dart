@@ -392,12 +392,14 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                 onSelected: (v) {
                   switch (v) {
                     case 'stok_ekle': _showStokEkleDialog(item); break;
+                    case 'yaprak_uygula': _showYaprakUygulaDialog(item); break;
                     case 'duzenle': _showEnvanterDialog(envanter: item); break;
                     case 'sil': _silEnvanter(item); break;
                   }
                 },
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(value: 'stok_ekle', child: ListTile(leading: Icon(Icons.add_box, color: Color(0xFF059669)), title: Text('Stok Ekle'))),
+                  const PopupMenuItem(value: 'yaprak_uygula', child: ListTile(leading: Icon(Icons.eco, color: Colors.teal), title: Text('Yaprak Gübre Uygula'))),
                   const PopupMenuItem(value: 'duzenle', child: ListTile(leading: Icon(Icons.edit), title: Text('Düzenle'))),
                   const PopupMenuItem(value: 'sil', child: ListTile(leading: Icon(Icons.delete, color: Colors.red), title: Text('Sil', style: TextStyle(color: Colors.red)))),
                 ],
@@ -733,10 +735,31 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Row(children: [
-                        Expanded(flex: 4, child: TextField(
-                          controller: s.gubreCtrl,
-                          decoration: InputDecoration(hintText: 'Gübre adı', hintStyle: const TextStyle(fontSize: 12), isDense: true, contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                          style: const TextStyle(fontSize: 13),
+                        Expanded(flex: 4, child: DropdownButtonFormField<String>(
+                          value: _envanter.any((e) => e.gubreAdi == s.gubreCtrl.text) ? s.gubreCtrl.text : null,
+                          isDense: true,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            hintText: 'Gübre seç',
+                            hintStyle: const TextStyle(fontSize: 12),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          style: const TextStyle(fontSize: 13, color: Colors.black),
+                          items: _envanter.map((e) => DropdownMenuItem(
+                            value: e.gubreAdi,
+                            child: Text('\${e.gubreAdi} (\${_formatMiktar(e.miktar)} \${e.birimLabel})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                          )).toList(),
+                          onChanged: (v) {
+                            if (v != null) {
+                              setDialogState(() {
+                                s.gubreCtrl.text = v;
+                                // Birim otomatik ayarla
+                                final envItem = _envanter.firstWhere((e) => e.gubreAdi == v);
+                                s.birim = envItem.birim;
+                              });
+                            }
+                          },
                         )),
                         const SizedBox(width: 6),
                         Expanded(flex: 2, child: TextField(
@@ -1146,6 +1169,129 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
             child: const Text('Ekle'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showYaprakUygulaDialog(GubreEnvanter item) {
+    final miktarCtrl = TextEditingController();
+    final notCtrl = TextEditingController();
+    String? seciliParselAdi;
+
+    // Seçili bahçenin parselleri
+    final bahce = _bahceler.where((b) => b.id == _seciliBahceId).firstOrNull;
+    final parseller = bahce?.parseller ?? [];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Row(children: [
+            const Icon(Icons.eco, color: Colors.teal),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Yaprak Gübre: \${item.gubreAdi}', overflow: TextOverflow.ellipsis)),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Row(children: [
+                  Icon(Icons.inventory_2, size: 18, color: Colors.teal.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Mevcut stok: \${_formatMiktar(item.miktar)} \${item.birimLabel}', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600))),
+                ]),
+              ),
+              const SizedBox(height: 14),
+              if (parseller.isNotEmpty) ...[
+                DropdownButtonFormField<String?>(
+                  value: seciliParselAdi,
+                  decoration: InputDecoration(
+                    labelText: 'Uygulanan Parsel',
+                    prefixIcon: const Icon(Icons.grid_view, color: Color(0xFF059669)),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('Tüm Parseller / Genel')),
+                    ...parseller.map((p) => DropdownMenuItem(value: p.ad, child: Text(p.ad))),
+                  ],
+                  onChanged: (v) => setDialogState(() => seciliParselAdi = v),
+                ),
+                const SizedBox(height: 14),
+              ],
+              TextField(
+                controller: miktarCtrl,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Kullanılan Miktar (\${item.birimLabel}) *',
+                  prefixIcon: const Icon(Icons.scale, color: Colors.teal),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: notCtrl,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: 'Uygulama Notu (opsiyonel)',
+                  hintText: 'Örn: Tüm parsellere yaprak gübresi',
+                  prefixIcon: const Icon(Icons.note_alt, color: Colors.grey),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : () async {
+                final miktar = double.tryParse(miktarCtrl.text) ?? 0;
+                if (miktar <= 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Geçerli miktar girin')));
+                  return;
+                }
+                if (miktar > item.miktar) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Stokta yeterli miktar yok! Mevcut: \${_formatMiktar(item.miktar)} \${item.birimLabel}'), backgroundColor: Colors.red));
+                  return;
+                }
+                setState(() => _isProcessing = true);
+                try {
+                  // Envanterden düş
+                  await _service.envanterdenDus(item.id!, miktar);
+                  // Katlama kaydı olarak kaydet (yaprak gübre uygulama kaydı)
+                  final auth = context.read<AuthProvider>();
+                  final user = auth.currentUser;
+                  if (user != null) {
+                    await _service.addKatlamaKaydi(KatlamaKaydi(
+                      bahceId: _seciliBahceId!,
+                      bahceAdi: _seciliBahceAdi!,
+                      tankId: 'yaprak_gubre',
+                      tankAdi: 'Yaprak Gübre',
+                      katlama: 1,
+                      kullanilanGubreler: [ReceteKalemi(gubreAdi: item.gubreAdi, miktar: miktar, birim: item.birim)],
+                      yapanKullaniciId: user.id ?? '',
+                      yapanKullaniciAdi: user.adSoyad,
+                    ));
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  _refresh();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text('\${item.gubreAdi} - \${_formatMiktar(miktar)} \${item.birimLabel} yaprak gübre uygulandı ✓'),
+                      backgroundColor: Colors.teal,
+                    ));
+                  }
+                } finally {
+                  if (mounted) setState(() => _isProcessing = false);
+                }
+              },
+              icon: const Icon(Icons.eco),
+              label: const Text('Uygula & Envanterden Düş'),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+            ),
+          ],
+        ),
       ),
     );
   }

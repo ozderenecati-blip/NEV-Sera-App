@@ -363,7 +363,7 @@ class _DailyWorkReportScreenState extends State<DailyWorkReportScreen> {
                     style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
                   ),
                 ),
-              if (!rapor.onaylandi && rapor.kullaniciId == auth.currentUser?.id)
+              if ((!rapor.onaylandi && rapor.kullaniciId == auth.currentUser?.id) || auth.canAssignTask)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: OutlinedButton.icon(

@@ -10,6 +10,7 @@ enum GorevTekrar {
   tekSefer,
   gunluk,
   haftalik,
+  ikiHaftalik,
   aylik,
 }
 
@@ -89,6 +90,7 @@ class Gorev {
         GorevTekrar.tekSefer => 'Tek Sefer',
         GorevTekrar.gunluk => 'Günlük',
         GorevTekrar.haftalik => 'Haftalık',
+        GorevTekrar.ikiHaftalik => 'İki Haftalık',
         GorevTekrar.aylik => 'Aylık',
       };
 

@@ -294,6 +294,40 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
                 ),
               ],
             ]),
+            if (auth.canAssignTask) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final onay = await showDialog<bool>(
+                    context: context,
+                    builder: (c) => AlertDialog(
+                      title: const Text('Görevi Sil'),
+                      content: Text('"${gorev.baslik}" görevi silinecek. Emin misiniz?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('İptal')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+                          child: const Text('Sil'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (onay == true && gorev.id != null) {
+                    await _service.deleteGorev(gorev.id!);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _loadData();
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Görev silindi ✓')));
+                  }
+                },
+                icon: const Icon(Icons.delete_forever, color: Colors.red),
+                label: const Text('Görevi Sil', style: TextStyle(color: Colors.red)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  minimumSize: const Size(double.infinity, 44),
+                ),
+              ),
+            ],
         ]),
       ),
     );
@@ -416,7 +450,7 @@ class _GorevYonetimiScreenState extends State<GorevYonetimiScreen> with SingleTi
             DropdownButtonFormField<GorevTekrar>(
               value: tekrar,
               decoration: InputDecoration(labelText: 'Tekrar', prefixIcon: const Icon(Icons.repeat), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-              items: GorevTekrar.values.map((t) => DropdownMenuItem(value: t, child: Text(switch (t) { GorevTekrar.tekSefer => 'Tek Sefer', GorevTekrar.gunluk => 'Günlük', GorevTekrar.haftalik => 'Haftalık', GorevTekrar.aylik => 'Aylık' }))).toList(),
+              items: GorevTekrar.values.map((t) => DropdownMenuItem(value: t, child: Text(switch (t) { GorevTekrar.tekSefer => 'Tek Sefer', GorevTekrar.gunluk => 'Günlük', GorevTekrar.haftalik => 'Haftalık', GorevTekrar.ikiHaftalik => 'İki Haftalık', GorevTekrar.aylik => 'Aylık' }))).toList(),
               onChanged: (v) => setDialogState(() => tekrar = v!),
             ),
             const SizedBox(height: 14),

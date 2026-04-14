@@ -282,163 +282,229 @@ class _BahceDetayScreenState extends State<BahceDetayScreen> {
 
   // ─────────────── PDF PAYLAŞIM ───────────────
 
+  Future<pw.Font> _loadTurkishFont() async {
+    final font = await PdfGoogleFonts.notoSansRegular();
+    return font;
+  }
+
+  Future<pw.Font> _loadTurkishFontBold() async {
+    final font = await PdfGoogleFonts.notoSansBold();
+    return font;
+  }
+
   Future<void> _shareParselPdf(int idx) async {
     final parsel = _bahce.parseller[idx];
+    await _generateAndSharePdf([parsel]);
+  }
+
+  Future<void> _shareAllParselsPdf() async {
+    await _generateAndSharePdf(_bahce.parseller);
+  }
+
+  Future<void> _generateAndSharePdf(List<Parsel> parseller) async {
     final tarih = DateFormat('dd.MM.yyyy HH:mm').format(DateTime.now());
+    final font = await _loadTurkishFont();
+    final fontBold = await _loadTurkishFontBold();
+    final baseStyle = pw.TextStyle(font: font, fontSize: 10);
+    final boldStyle = pw.TextStyle(font: fontBold, fontSize: 10);
+    final headerStyle = pw.TextStyle(font: fontBold, fontWeight: pw.FontWeight.bold, fontSize: 10);
+    final titleStyle = pw.TextStyle(font: fontBold, fontSize: 20, fontWeight: pw.FontWeight.bold);
+    final subtitleStyle = pw.TextStyle(font: font, fontSize: 12, color: PdfColors.grey700);
+    final smallStyle = pw.TextStyle(font: font, fontSize: 8, color: PdfColors.grey500);
+    final cellStyle = pw.TextStyle(font: font, fontSize: 9);
+    final cellBoldStyle = pw.TextStyle(font: fontBold, fontSize: 9, fontWeight: pw.FontWeight.bold);
+
+    // Renk paletleri (cins bazlı)
+    final cinsRenkler = <String, PdfColor>{};
+    final renkPaleti = [PdfColors.green600, PdfColors.orange600, PdfColors.blue600, PdfColors.red600, PdfColors.purple600, PdfColors.teal600, PdfColors.amber800, PdfColors.indigo600];
 
     final pdf = pw.Document();
 
-    // Cins dağılımını hesapla
-    final cinsSaksi = <String, int>{};
-    final cinsMetre = <String, double>{};
-    for (final s in parsel.siralar) {
-      if (s.cins != null && s.cins!.isNotEmpty) {
-        cinsSaksi[s.cins!] = (cinsSaksi[s.cins!] ?? 0) + s.saksiSayisi;
-        cinsMetre[s.cins!] = (cinsMetre[s.cins!] ?? 0) + s.uzunluk;
+    for (final parsel in parseller) {
+      // Cins dağılımını hesapla
+      final cinsSaksi = <String, int>{};
+      final cinsMetre = <String, double>{};
+      for (final s in parsel.siralar) {
+        if (s.cins != null && s.cins!.isNotEmpty) {
+          cinsSaksi[s.cins!] = (cinsSaksi[s.cins!] ?? 0) + s.saksiSayisi;
+          cinsMetre[s.cins!] = (cinsMetre[s.cins!] ?? 0) + s.uzunluk;
+          if (!cinsRenkler.containsKey(s.cins!)) {
+            cinsRenkler[s.cins!] = renkPaleti[cinsRenkler.length % renkPaleti.length];
+          }
+        }
       }
-    }
-    final toplamSaksi =
-        parsel.siralar.fold<int>(0, (s, r) => s + r.saksiSayisi);
-    final toplamMetre =
-        parsel.siralar.fold<double>(0, (s, r) => s + r.uzunluk);
+      final toplamSaksi = parsel.siralar.fold<int>(0, (s, r) => s + r.saksiSayisi);
+      final toplamMetre = parsel.siralar.fold<double>(0, (s, r) => s + r.uzunluk);
+      final maxMetre = parsel.siralar.fold<double>(0, (m, s) => s.uzunluk > m ? s.uzunluk : m);
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        header: (context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('NEV Seracılık',
-                    style: pw.TextStyle(
-                        fontSize: 10, color: PdfColors.grey600)),
-                pw.Text(tarih,
-                    style: pw.TextStyle(
-                        fontSize: 10, color: PdfColors.grey600)),
-              ],
-            ),
-            pw.SizedBox(height: 8),
-            pw.Text('${_bahce.ad} - ${parsel.ad}',
-                style: pw.TextStyle(
-                    fontSize: 20, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 4),
-            pw.Text(
-                '${parsel.siraSayisi} sıra  •  $toplamSaksi saksı  •  ${toplamMetre.toStringAsFixed(0)} m',
-                style: pw.TextStyle(
-                    fontSize: 12, color: PdfColors.grey700)),
-            pw.Divider(),
-          ],
-        ),
-        footer: (context) => pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text('${_bahce.ad} - ${parsel.ad}',
-                style: pw.TextStyle(
-                    fontSize: 8, color: PdfColors.grey500)),
-            pw.Text('Sayfa ${context.pageNumber}/${context.pagesCount}',
-                style: pw.TextStyle(
-                    fontSize: 8, color: PdfColors.grey500)),
-          ],
-        ),
-        build: (context) => [
-          // Cins dağılımı
-          if (cinsSaksi.isNotEmpty) ...[
-            pw.Text('Cins Dağılımı',
-                style: pw.TextStyle(
-                    fontSize: 14, fontWeight: pw.FontWeight.bold)),
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          header: (context) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('NEV Seracilik', style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey600)),
+                  pw.Text(tarih, style: pw.TextStyle(font: font, fontSize: 10, color: PdfColors.grey600)),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text('${_bahce.ad} - ${parsel.ad}', style: titleStyle),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                  '${parsel.siraSayisi} sira  /  $toplamSaksi saksi  /  ${toplamMetre.toStringAsFixed(0)} m',
+                  style: subtitleStyle),
+              pw.Divider(),
+            ],
+          ),
+          footer: (context) => pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('${_bahce.ad} - ${parsel.ad}', style: smallStyle),
+              pw.Text('Sayfa ${context.pageNumber}/${context.pagesCount}', style: smallStyle),
+            ],
+          ),
+          build: (context) => [
+            // Cins dağılımı
+            if (cinsSaksi.isNotEmpty) ...[
+              pw.Text('Cins Dagilimi', style: pw.TextStyle(font: fontBold, fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 6),
+              pw.Table.fromTextArray(
+                headerStyle: headerStyle,
+                cellStyle: cellStyle,
+                cellAlignment: pw.Alignment.centerLeft,
+                headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                headers: ['Cins', 'Saksi Adedi', 'Toplam Metre'],
+                data: cinsSaksi.entries
+                    .map((e) => [
+                          e.key,
+                          '${e.value}',
+                          '${(cinsMetre[e.key] ?? 0).toStringAsFixed(0)} m',
+                        ])
+                    .toList(),
+              ),
+              pw.SizedBox(height: 16),
+            ],
+
+            // Sıra detay tablosu
+            pw.Text('Sira Detaylari', style: pw.TextStyle(font: fontBold, fontSize: 14, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 6),
             pw.Table.fromTextArray(
-              headerStyle: pw.TextStyle(
-                  fontWeight: pw.FontWeight.bold, fontSize: 10),
-              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(font: fontBold, fontWeight: pw.FontWeight.bold, fontSize: 9),
+              cellStyle: cellStyle,
               cellAlignment: pw.Alignment.centerLeft,
-              headerDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey200),
-              headers: ['Cins', 'Saksı Adedi', 'Toplam Metre'],
-              data: cinsSaksi.entries
-                  .map((e) => [
-                        e.key,
-                        '${e.value}',
-                        '${(cinsMetre[e.key] ?? 0).toStringAsFixed(0)} m',
+              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              columnWidths: {
+                0: const pw.FixedColumnWidth(40),
+                1: const pw.FixedColumnWidth(60),
+                2: const pw.FixedColumnWidth(60),
+                3: const pw.FlexColumnWidth(),
+              },
+              headers: ['Sira', 'Metre', 'Saksi', 'Cins'],
+              data: parsel.siralar
+                  .map((s) => [
+                        '${s.numara}',
+                        s.uzunluk > 0
+                            ? '${s.uzunluk.toStringAsFixed(s.uzunluk == s.uzunluk.roundToDouble() ? 0 : 1)} m'
+                            : '-',
+                        s.saksiSayisi > 0 ? '${s.saksiSayisi}' : '-',
+                        s.cins ?? '-',
                       ])
                   .toList(),
             ),
-            pw.SizedBox(height: 16),
-          ],
 
-          // Sıra detay tablosu
-          pw.Text('Sıra Detayları',
-              style: pw.TextStyle(
-                  fontSize: 14, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 6),
-          pw.Table.fromTextArray(
-            headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold, fontSize: 9),
-            cellStyle: const pw.TextStyle(fontSize: 9),
-            cellAlignment: pw.Alignment.centerLeft,
-            headerDecoration:
-                const pw.BoxDecoration(color: PdfColors.grey200),
-            columnWidths: {
-              0: const pw.FixedColumnWidth(40),
-              1: const pw.FixedColumnWidth(60),
-              2: const pw.FixedColumnWidth(60),
-              3: const pw.FlexColumnWidth(),
-            },
-            headers: ['Sıra', 'Metre', 'Saksı', 'Cins'],
-            data: parsel.siralar
-                .map((s) => [
-                      '${s.numara}',
-                      s.uzunluk > 0
-                          ? '${s.uzunluk.toStringAsFixed(s.uzunluk == s.uzunluk.roundToDouble() ? 0 : 1)} m'
-                          : '-',
-                      s.saksiSayisi > 0 ? '${s.saksiSayisi}' : '-',
-                      s.cins ?? '-',
-                    ])
-                .toList(),
-          ),
-
-          // Toplam satırı
-          pw.SizedBox(height: 8),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(8),
-            decoration: const pw.BoxDecoration(
-                color: PdfColors.green50,
-                borderRadius:
-                    pw.BorderRadius.all(pw.Radius.circular(4))),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-              children: [
-                pw.Text('Toplam: ${parsel.siraSayisi} sıra',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                pw.Text('${toplamMetre.toStringAsFixed(0)} m',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                pw.Text('$toplamSaksi saksı',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-              ],
+            // Toplam satırı
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              decoration: const pw.BoxDecoration(
+                  color: PdfColors.green50,
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(4))),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
+                children: [
+                  pw.Text('Toplam: ${parsel.siraSayisi} sira', style: pw.TextStyle(font: fontBold, fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                  pw.Text('${toplamMetre.toStringAsFixed(0)} m', style: pw.TextStyle(font: fontBold, fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                  pw.Text('$toplamSaksi saksi', style: pw.TextStyle(font: fontBold, fontWeight: pw.FontWeight.bold, fontSize: 11)),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+
+            // ═══ GÖRSEL İLÜSTRASYON ═══
+            pw.SizedBox(height: 20),
+            pw.Text('Sira Gorseli', style: pw.TextStyle(font: fontBold, fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 8),
+            ...parsel.siralar.map((s) {
+              final ratio = maxMetre > 0 ? s.uzunluk / maxMetre : 0.0;
+              final barWidth = 350.0 * ratio;
+              final cins = s.cins ?? '';
+              final barColor = cinsRenkler[cins] ?? PdfColors.grey400;
+
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 3),
+                child: pw.Row(
+                  children: [
+                    pw.SizedBox(width: 25, child: pw.Text('${s.numara}', style: pw.TextStyle(font: fontBold, fontSize: 8, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.right)),
+                    pw.SizedBox(width: 6),
+                    pw.Container(
+                      width: math.max(2.0, barWidth),
+                      height: 10,
+                      decoration: pw.BoxDecoration(
+                        color: barColor,
+                        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+                      ),
+                    ),
+                    pw.SizedBox(width: 6),
+                    pw.Text(
+                      '${s.uzunluk > 0 ? "${s.uzunluk.toStringAsFixed(s.uzunluk == s.uzunluk.roundToDouble() ? 0 : 1)}m" : ""}'
+                      '${s.uzunluk > 0 && s.saksiSayisi > 0 ? " / " : ""}'
+                      '${s.saksiSayisi > 0 ? "${s.saksiSayisi} sk" : ""}'
+                      '${cins.isNotEmpty ? " ($cins)" : ""}',
+                      style: pw.TextStyle(font: font, fontSize: 7, color: PdfColors.grey700),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+            // Cins renk açıklaması
+            if (cinsRenkler.isNotEmpty) ...[
+              pw.SizedBox(height: 10),
+              pw.Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                children: cinsRenkler.entries.map((e) => pw.Row(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Container(width: 10, height: 10, decoration: pw.BoxDecoration(color: e.value, borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)))),
+                    pw.SizedBox(width: 4),
+                    pw.Text(e.key, style: pw.TextStyle(font: font, fontSize: 8)),
+                  ],
+                )).toList(),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
 
     if (mounted) {
+      final filename = parseller.length == 1
+          ? '${_bahce.ad}_${parseller.first.ad}.pdf'.replaceAll(' ', '_')
+          : '${_bahce.ad}_tum_parseller.pdf'.replaceAll(' ', '_');
       await Printing.sharePdf(
         bytes: Uint8List.fromList(bytes),
-        filename:
-            '${_bahce.ad}_${parsel.ad}.pdf'.replaceAll(' ', '_'),
+        filename: filename,
       );
     }
   }
 
-  // ─────────────── SIRA DÜZENLEME EKRANI ───────────────
+    // ─────────────── SIRA DÜZENLEME EKRANI ───────────────
 
   void _openSiraDuzenle(int parselIdx) {
     if (parselIdx < 0 || parselIdx >= _bahce.parseller.length) return;
@@ -466,6 +532,14 @@ class _BahceDetayScreenState extends State<BahceDetayScreen> {
         title: Text(_bahce.ad),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
+        actions: [
+          if (_bahce.parseller.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Tüm Parselleri PDF',
+              onPressed: _shareAllParselsPdf,
+            ),
+        ],
       ),
       body: _bahce.parseller.isEmpty
           ? _buildEmptyState()

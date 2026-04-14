@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/bahce.dart';
@@ -318,7 +321,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                           border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100)),
                         ),
                         child: Row(children: [
-                          Expanded(flex: 3, child: Text(r.gubreAdi, style: const TextStyle(fontSize: 13))),
+                          Expanded(flex: 3, child: Row(children: [Flexible(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 13))), _gorselIkon(r.gubreAdi)])),
                           Expanded(flex: 2, child: Text(_formatMiktar(r.miktar), textAlign: TextAlign.right, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
                           const SizedBox(width: 8),
                           SizedBox(width: 30, child: Text(r.birimLabel, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))),
@@ -376,7 +379,14 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
           child: Icon(isDusuk ? Icons.warning_amber : Icons.science,
               color: isDusuk ? Colors.red : const Color(0xFF059669)),
         ),
-        title: Text(item.gubreAdi, style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(children: [
+          Expanded(child: Text(item.gubreAdi, style: const TextStyle(fontWeight: FontWeight.bold))),
+          if (item.gorselUrl != null && item.gorselUrl!.isNotEmpty)
+            GestureDetector(
+              onTap: () => _showGorselDialog(item.gubreAdi, item.gorselUrl!),
+              child: Icon(Icons.image_outlined, size: 18, color: Colors.grey.shade500),
+            ),
+        ]),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const SizedBox(height: 2),
           Text('Stok: ${_formatMiktar(item.miktar)} ${item.birimLabel}',
@@ -473,7 +483,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100))),
                           child: Row(children: [
-                            Expanded(child: Text(g.gubreAdi, style: const TextStyle(fontSize: 13))),
+                            Expanded(child: Row(children: [Flexible(child: Text(g.gubreAdi, style: const TextStyle(fontSize: 13))), _gorselIkon(g.gubreAdi)])),
                             Text('${_formatMiktar(g.miktar)} ${g.birimLabel}',
                                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.purple)),
                           ]),
@@ -662,7 +672,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100))),
                       child: Row(children: [
-                        Expanded(flex: 4, child: Text(r.gubreAdi, style: const TextStyle(fontSize: 14))),
+                        Expanded(flex: 4, child: Row(children: [Flexible(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 14))), _gorselIkon(r.gubreAdi)])),
                         Expanded(flex: 2, child: Text(_formatMiktar(r.miktar), textAlign: TextAlign.right, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF059669)))),
                         const SizedBox(width: 10),
                         SizedBox(width: 35, child: Text(r.birimLabel, style: TextStyle(fontSize: 13, color: Colors.grey.shade600))),
@@ -946,7 +956,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100))),
                                   child: Row(children: [
-                                    Expanded(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 13))),
+                                    Expanded(child: Row(children: [Flexible(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 13))), _gorselIkon(r.gubreAdi)])),
                                     Text('${_formatMiktar(r.miktar)} ${r.birimLabel}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                                   ]),
                                 );
@@ -1022,7 +1032,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                         child: Row(children: [
                           const Icon(Icons.science, size: 16, color: Color(0xFF059669)),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 14))),
+                          Expanded(child: Row(children: [Flexible(child: Text(r.gubreAdi, style: const TextStyle(fontSize: 14))), _gorselIkon(r.gubreAdi)])),
                           Text('${_formatMiktar(r.miktar)} ${r.birimLabel}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         ]),
                       );
@@ -1104,6 +1114,47 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                 controller: sinirCtrl, keyboardType: TextInputType.number,
                 decoration: InputDecoration(labelText: 'Uyarı Sınırı', helperText: 'Stok bu değere düşünce uyarı verilir', prefixIcon: const Icon(Icons.warning_amber, color: Colors.orange), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
               ),
+              if (isEdit && envanter.id != null) ...[
+                const SizedBox(height: 14),
+                Builder(builder: (_) {
+                  final gorselNotifier = ValueNotifier<String?>(envanter.gorselUrl);
+                  return ValueListenableBuilder<String?>(
+                    valueListenable: gorselNotifier,
+                    builder: (_, gorselUrl, __) => Column(mainAxisSize: MainAxisSize.min, children: [
+                      if (gorselUrl != null && gorselUrl.isNotEmpty)
+                        Stack(children: [
+                          GestureDetector(
+                            onTap: () => _showGorselDialog(envanter.gubreAdi, gorselUrl),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.network(gorselUrl, height: 120, width: double.infinity, fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(height: 60, color: Colors.grey.shade200, child: const Center(child: Icon(Icons.broken_image)))),
+                            ),
+                          ),
+                          Positioned(top: 4, right: 4, child: GestureDetector(
+                            onTap: () async {
+                              await _service.deleteGubreGorsel(envanter.id!);
+                              gorselNotifier.value = null;
+                              _refresh();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            ),
+                          )),
+                        ]),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _pickAndUploadGorsel(envanter.id!, setDialogState, gorselNotifier),
+                        icon: Icon(gorselUrl != null ? Icons.refresh : Icons.add_photo_alternate_outlined, size: 18),
+                        label: Text(gorselUrl != null ? 'Görseli Değiştir' : 'Referans Görsel Ekle'),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.grey.shade700, side: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                    ]),
+                  );
+                }),
+              ],
             ]),
           ),
           actions: [
@@ -1409,6 +1460,110 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
   }
 
   // ═══════════════ YARDIMCI ═══════════════
+
+  // ═══════════════ GÖRSEL YARDIMCI METOTLARI ═══════════════
+
+  void _showGorselDialog(String gubreAdi, String url) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.black87,
+        insetPadding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 4, 0),
+            child: Row(children: [
+              Expanded(child: Text(gubreAdi, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+              IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close, color: Colors.white)),
+            ]),
+          ),
+          Flexible(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Image.network(url, fit: BoxFit.contain,
+                  loadingBuilder: (_, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  errorBuilder: (_, __, ___) => const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.broken_image, size: 64, color: Colors.white54), SizedBox(height: 8), Text('Görsel yüklenemedi', style: TextStyle(color: Colors.white54))])),
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// Envanterdeki görsel URL'ini gübre adıyla eşleştir
+  String? _getGorselUrl(String gubreAdi) {
+    final item = _envanter.where((e) =>
+        e.gubreAdi.toLowerCase() == gubreAdi.toLowerCase() &&
+        e.bahceId == _seciliBahceId &&
+        e.gorselUrl != null &&
+        e.gorselUrl!.isNotEmpty).firstOrNull;
+    return item?.gorselUrl;
+  }
+
+  /// Küçük görsel ikonu widget'ı — tıklanabilir
+  Widget _gorselIkon(String gubreAdi) {
+    final url = _getGorselUrl(gubreAdi);
+    if (url == null) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () => _showGorselDialog(gubreAdi, url),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Icon(Icons.image_outlined, size: 16, color: Colors.grey.shade500),
+      ),
+    );
+  }
+
+  Future<void> _pickAndUploadGorsel(String envanterId, StateSetter setDialogState, ValueNotifier<String?> gorselNotifier) async {
+    final picker = ImagePicker();
+    XFile? picked;
+
+    if (kIsWeb) {
+      picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 70);
+    } else {
+      // Mobilde kamera/galeri seç
+      final source = await showDialog<ImageSource>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Görsel Kaynağı'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Kamera'), onTap: () => Navigator.pop(ctx, ImageSource.camera)),
+            ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeri'), onTap: () => Navigator.pop(ctx, ImageSource.gallery)),
+          ]),
+        ),
+      );
+      if (source == null) return;
+      picked = await picker.pickImage(source: source, maxWidth: 800, imageQuality: 70);
+    }
+
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+
+    // Boyut kontrolü — max 2MB
+    if (bytes.length > 2 * 1024 * 1024) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Görsel çok büyük (max 2MB)'), backgroundColor: Colors.red),
+        );
+      }
+      return;
+    }
+
+    final url = await _service.uploadGubreGorsel(envanterId, bytes, picked.name);
+    if (url != null) {
+      gorselNotifier.value = url;
+      _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Görsel yüklendi ✓')),
+        );
+      }
+    }
+  }
 
   String _formatMiktar(double val) {
     if (val == val.roundToDouble()) return val.toInt().toString();

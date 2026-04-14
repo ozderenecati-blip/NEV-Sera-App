@@ -174,7 +174,36 @@ class AuthService {
     }
   }
 
-  /// Şifre değiştir (admin veya kendi şifresi)
+
+  /// Kullanıcıyı tamamen sil (Firestore'dan)
+  Future<bool> deleteUser(String userId) async {
+    if (_currentUser?.canManageUsers != true) return false;
+    // Admin kendini silemesin
+    if (_currentUser?.id == userId) return false;
+    
+    try {
+      await _usersRef.doc(userId).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteUser error: $e');
+      return false;
+    }
+  }
+
+  /// Pasif kullanıcıyı tekrar aktif et
+  Future<bool> activateUser(String userId) async {
+    if (_currentUser?.canManageUsers != true) return false;
+    
+    try {
+      await _usersRef.doc(userId).update({'aktif': true});
+      return true;
+    } catch (e) {
+      debugPrint('activateUser error: $e');
+      return false;
+    }
+  }
+
+    /// Şifre değiştir (admin veya kendi şifresi)
   Future<bool> changePassword(String userId, String newPassword) async {
     // Admin her şifreyi değiştirebilir, kullanıcı sadece kendisini
     if (_currentUser?.canManageUsers != true && _currentUser?.id != userId) {

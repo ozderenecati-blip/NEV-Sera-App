@@ -116,6 +116,7 @@ class GubreEnvanter {
   final double miktar;
   final GubreBirim birim;
   final double uyariSiniri; // bu değerin altına düşünce uyarı verilir
+  final String? gorselUrl; // referans görsel URL'i (Firebase Storage)
   final DateTime sonGuncelleme;
 
   GubreEnvanter({
@@ -126,6 +127,7 @@ class GubreEnvanter {
     this.miktar = 0,
     this.birim = GubreBirim.kg,
     this.uyariSiniri = 0,
+    this.gorselUrl,
     DateTime? sonGuncelleme,
   }) : sonGuncelleme = sonGuncelleme ?? DateTime.now();
 
@@ -144,6 +146,7 @@ class GubreEnvanter {
         'miktar': miktar,
         'birim': birim.name,
         'uyari_siniri': uyariSiniri,
+        'gorsel_url': gorselUrl,
         'son_guncelleme': sonGuncelleme.toIso8601String(),
       };
 
@@ -159,6 +162,7 @@ class GubreEnvanter {
           orElse: () => GubreBirim.kg,
         ),
         uyariSiniri: (map['uyari_siniri'] as num?)?.toDouble() ?? 0,
+        gorselUrl: map['gorsel_url'] as String?,
         sonGuncelleme: map['son_guncelleme'] != null
             ? DateTime.tryParse(map['son_guncelleme']) ?? DateTime.now()
             : DateTime.now(),
@@ -167,6 +171,8 @@ class GubreEnvanter {
   GubreEnvanter copyWith({
     double? miktar,
     double? uyariSiniri,
+    String? gorselUrl,
+    bool clearGorsel = false,
   }) =>
       GubreEnvanter(
         id: id,
@@ -176,6 +182,7 @@ class GubreEnvanter {
         miktar: miktar ?? this.miktar,
         birim: birim,
         uyariSiniri: uyariSiniri ?? this.uyariSiniri,
+        gorselUrl: clearGorsel ? null : (gorselUrl ?? this.gorselUrl),
         sonGuncelleme: DateTime.now(),
       );
 }

@@ -169,14 +169,28 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               case 'deactivate':
                 _showDeactivateDialog(user);
                 break;
+              case 'activate':
+                _showActivateDialog(user);
+                break;
+              case 'delete':
+                _showDeleteUserDialog(user);
+                break;
             }
           },
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit), title: Text('Düzenle'))),
-            const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.lock_reset), title: Text('Şifre Değiştir'))),
-            if (user.aktif)
-              const PopupMenuItem(value: 'deactivate', child: ListTile(leading: Icon(Icons.person_off, color: Colors.red), title: Text('Deaktif Et', style: TextStyle(color: Colors.red)))),
-          ],
+          itemBuilder: (context) {
+            final currentUserId = context.read<AuthProvider>().currentUser?.id;
+            final isSelf = user.id == currentUserId;
+            return [
+              const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit), title: Text('Düzenle'))),
+              const PopupMenuItem(value: 'password', child: ListTile(leading: Icon(Icons.lock_reset), title: Text('Şifre Değiştir'))),
+              if (user.aktif)
+                const PopupMenuItem(value: 'deactivate', child: ListTile(leading: Icon(Icons.person_off, color: Colors.orange), title: Text('Pasif Yap', style: TextStyle(color: Colors.orange)))),
+              if (!user.aktif)
+                const PopupMenuItem(value: 'activate', child: ListTile(leading: Icon(Icons.person_add_alt_1, color: Color(0xFF059669)), title: Text('Aktif Yap', style: TextStyle(color: Color(0xFF059669))))),
+              if (!isSelf)
+                const PopupMenuItem(value: 'delete', child: ListTile(leading: Icon(Icons.delete_forever, color: Colors.red), title: Text('Hesabı Sil', style: TextStyle(color: Colors.red)))),
+            ];
+          },
         ),
       ),
     ).animate().fadeIn(delay: Duration(milliseconds: 100 * index)).slideX(begin: 0.05, end: 0);
@@ -448,6 +462,99 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               }
             },
             child: const Text('Deaktif Et', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showActivateDialog(AppUser user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Kullanıcıyı Aktif Et'),
+        content: Text('${user.adSoyad} kullanıcısını tekrar aktif etmek istediğinize emin misiniz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final success = await context.read<AuthProvider>().activateUser(user.id!);
+              if (success && ctx.mounted) {
+                Navigator.pop(ctx);
+                _loadData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${user.adSoyad} tekrar aktif edildi ✓'), backgroundColor: const Color(0xFF059669)),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF059669), foregroundColor: Colors.white),
+            child: const Text('Aktif Et'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteUserDialog(AppUser user) {
+    final currentUserId = context.read<AuthProvider>().currentUser?.id;
+    if (user.id == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kendinizi silemezsiniz!'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.warning_amber, color: Colors.red, size: 28),
+          const SizedBox(width: 8),
+          const Text('Hesabı Sil'),
+        ]),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${user.adSoyad} (@${user.kullaniciAdi}) kullanıcısını tamamen silmek istediğinize emin misiniz?'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade200),
+            ),
+            child: Row(children: [
+              Icon(Icons.info_outline, color: Colors.red.shade700, size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Bu işlem geri alınamaz! Kullanıcının mevcut görev ve raporları korunur.', style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
+            ]),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final success = await context.read<AuthProvider>().deleteUser(user.id!);
+              if (success && ctx.mounted) {
+                Navigator.pop(ctx);
+                _loadData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('${user.adSoyad} hesabı silindi'), backgroundColor: Colors.red),
+                );
+              } else if (ctx.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Silme işlemi başarısız'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Evet, Sil'),
           ),
         ],
       ),

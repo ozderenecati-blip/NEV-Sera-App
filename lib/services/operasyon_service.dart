@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/bahce.dart';
 import '../models/gorev.dart';
@@ -379,6 +381,50 @@ class OperasyonService {
       return true;
     } catch (e) {
       debugPrint('deleteEnvanter error: $e');
+      return false;
+    }
+  }
+
+
+  /// Gübre referans görseli yükle (Firebase Storage)
+  Future<String?> uploadGubreGorsel(String envanterId, Uint8List bytes, String filename) async {
+    try {
+      final ext = filename.split('.').last.toLowerCase();
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('gubre_gorseller')
+          .child('$envanterId.$ext');
+      final metadata = SettableMetadata(contentType: 'image/$ext');
+      await ref.putData(bytes, metadata);
+      final url = await ref.getDownloadURL();
+      // Firestore kaydını güncelle
+      await _envanterRef.doc(envanterId).update({'gorsel_url': url});
+      return url;
+    } catch (e) {
+      debugPrint('uploadGubreGorsel error: $e');
+      return null;
+    }
+  }
+
+  /// Gübre görselini sil
+  Future<bool> deleteGubreGorsel(String envanterId) async {
+    try {
+      // Storage'dan sil
+      final listResult = await FirebaseStorage.instance
+          .ref()
+          .child('gubre_gorseller')
+          .listAll();
+      for (final item in listResult.items) {
+        if (item.name.startsWith(envanterId)) {
+          await item.delete();
+          break;
+        }
+      }
+      // Firestore'dan URL'i temizle
+      await _envanterRef.doc(envanterId).update({'gorsel_url': null});
+      return true;
+    } catch (e) {
+      debugPrint('deleteGubreGorsel error: $e');
       return false;
     }
   }

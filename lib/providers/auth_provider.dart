@@ -133,7 +133,22 @@ class AuthProvider extends ChangeNotifier {
     return result;
   }
 
-  /// Şifre değiştir
+
+  /// Kullanıcıyı tamamen sil
+  Future<bool> deleteUser(String userId) async {
+    final result = await _authService.deleteUser(userId);
+    notifyListeners();
+    return result;
+  }
+
+  /// Pasif kullanıcıyı aktif et
+  Future<bool> activateUser(String userId) async {
+    final result = await _authService.activateUser(userId);
+    notifyListeners();
+    return result;
+  }
+
+    /// Şifre değiştir
   Future<bool> changePassword(String userId, String newPassword) async {
     final result = await _authService.changePassword(userId, newPassword);
     notifyListeners();

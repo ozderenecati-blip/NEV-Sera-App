@@ -1,12 +1,14 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:excel/excel.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../models/kasa_hareketi.dart';
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
 class ExcelService {
   
-  Future<String> exportToExcel(List<KasaHareketi> hareketler) async {
+  Future<void> exportToExcel(List<KasaHareketi> hareketler) async {
     final excel = Excel.createExcel();
     final sheet = excel['İşlemler'];
     
@@ -67,19 +69,25 @@ class ExcelService {
     // Varsayılan Sheet1'i kaldır
     excel.delete('Sheet1');
     
-    // Dosyayı kaydet
-    final dir = await getApplicationDocumentsDirectory();
-    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final filePath = '${dir.path}/nev_seracilik_$timestamp.xlsx';
-    
+    // Excel byte'larını oluştur
     final fileBytes = excel.save();
-    if (fileBytes != null) {
-      final file = File(filePath);
-      await file.writeAsBytes(fileBytes);
-      return filePath;
+    if (fileBytes == null) {
+      throw Exception('Excel dosyası oluşturulamadı');
     }
     
-    throw Exception('Excel dosyası oluşturulamadı');
+    // Web'de tarayıcı üzerinden indirme tetikle
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final fileName = 'nev_seracilik_$timestamp.xlsx';
+    
+    final uint8List = Uint8List.fromList(fileBytes);
+    final blob = html.Blob([uint8List], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute('download', fileName)
+      ..click();
+    
+    html.Url.revokeObjectUrl(url);
   }
   
   String _getKaynagiText(String? kaynagi) {

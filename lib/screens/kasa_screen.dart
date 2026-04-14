@@ -94,16 +94,13 @@ class _KasaScreenState extends State<KasaScreen> {
 
   Future<void> _exportToExcel(List<KasaHareketi> hareketler) async {
     try {
-      final filePath = await _excelService.exportToExcel(hareketler);
+      await _excelService.exportToExcel(hareketler);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Excel dosyası oluşturuldu'),
-            action: SnackBarAction(
-              label: 'Paylaş',
-              onPressed: () => Share.shareXFiles([XFile(filePath)]),
-            ),
+          const SnackBar(
+            content: Text('Excel dosyası indirildi ✓'),
+            backgroundColor: Colors.green,
           ),
         );
       }

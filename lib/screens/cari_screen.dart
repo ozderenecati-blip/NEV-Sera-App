@@ -33,7 +33,8 @@ class _CariScreenState extends State<CariScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final cariler = provider.cariler;
+          final cariler = [...provider.cariler]
+            ..sort((a, b) => a.firmaAdi.toLowerCase().compareTo(b.firmaAdi.toLowerCase()));
 
           if (cariler.isEmpty) {
             return Center(

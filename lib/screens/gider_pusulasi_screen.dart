@@ -74,7 +74,8 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
           return const SkeletonListView(itemCount: 4);
         }
 
-        final gundelikciler = provider.gundelikciler;
+        final gundelikciler = [...provider.gundelikciler]
+          ..sort((a, b) => a.adSoyad.toLowerCase().compareTo(b.adSoyad.toLowerCase()));
 
         if (gundelikciler.isEmpty) {
           return EmptyStateWidget(

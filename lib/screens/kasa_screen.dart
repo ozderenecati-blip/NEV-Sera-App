@@ -34,6 +34,7 @@ class _KasaScreenState extends State<KasaScreen> {
   DateTimeRange? _filterDateRange;
   String _searchQuery = '';
   bool _showFilters = false;
+  bool _sortOldestFirst = false; // false = yeni en üstte, true = eski en üstte
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -180,7 +181,10 @@ class _KasaScreenState extends State<KasaScreen> {
                 (context, provider, child) => PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) {
-                    if (value == 'excel') {
+                    if (value == 'sort') {
+                      HapticHelper.lightTap();
+                      setState(() => _sortOldestFirst = !_sortOldestFirst);
+                    } else if (value == 'excel') {
                       _exportToExcel(
                         _filterHareketler(provider.kasaHareketleri),
                       );
@@ -197,6 +201,16 @@ class _KasaScreenState extends State<KasaScreen> {
                               Icon(Icons.table_chart, size: 20),
                               SizedBox(width: 8),
                               Text('Excel\'e Aktar'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'sort',
+                          child: Row(
+                            children: [
+                              Icon(_sortOldestFirst ? Icons.arrow_downward : Icons.arrow_upward, size: 20),
+                              const SizedBox(width: 8),
+                              Text(_sortOldestFirst ? 'Yeni → Eski' : 'Eski → Yeni'),
                             ],
                           ),
                         ),
@@ -232,6 +246,11 @@ class _KasaScreenState extends State<KasaScreen> {
           final filteredHareketler = _filterHareketler(
             provider.kasaHareketleri,
           );
+
+          // Tarihe göre sırala
+          filteredHareketler.sort((a, b) => _sortOldestFirst
+              ? a.tarih.compareTo(b.tarih)
+              : b.tarih.compareTo(a.tarih));
 
           return Column(
             children: [

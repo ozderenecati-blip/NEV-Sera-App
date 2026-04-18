@@ -758,7 +758,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                           style: const TextStyle(fontSize: 13, color: Colors.black),
                           items: _envanter.map((e) => DropdownMenuItem(
                             value: e.gubreAdi,
-                            child: Text('\${e.gubreAdi} (\${_formatMiktar(e.miktar)} \${e.birimLabel})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                            child: Text('${e.gubreAdi} (${_formatMiktar(e.miktar)} ${e.birimLabel})', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
                           )).toList(),
                           onChanged: (v) {
                             if (v != null) {
@@ -1313,7 +1313,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
           title: Row(children: [
             const Icon(Icons.eco, color: Colors.teal),
             const SizedBox(width: 8),
-            Expanded(child: Text('Yaprak Gübre: \${item.gubreAdi}', overflow: TextOverflow.ellipsis)),
+            Expanded(child: Text('Yaprak Gübre: ${item.gubreAdi}', overflow: TextOverflow.ellipsis)),
           ]),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1323,7 +1323,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                 child: Row(children: [
                   Icon(Icons.inventory_2, size: 18, color: Colors.teal.shade700),
                   const SizedBox(width: 8),
-                  Expanded(child: Text('Mevcut stok: \${_formatMiktar(item.miktar)} \${item.birimLabel}', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600))),
+                  Expanded(child: Text('Mevcut stok: ${_formatMiktar(item.miktar)} ${item.birimLabel}', style: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.w600))),
                 ]),
               ),
               const SizedBox(height: 14),
@@ -1348,7 +1348,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                 keyboardType: TextInputType.number,
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: 'Kullanılan Miktar (\${item.birimLabel}) *',
+                  labelText: 'Kullanılan Miktar (${item.birimLabel}) *',
                   prefixIcon: const Icon(Icons.scale, color: Colors.teal),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -1376,7 +1376,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                   return;
                 }
                 if (miktar > item.miktar) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Stokta yeterli miktar yok! Mevcut: \${_formatMiktar(item.miktar)} \${item.birimLabel}'), backgroundColor: Colors.red));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Stokta yeterli miktar yok! Mevcut: ${_formatMiktar(item.miktar)} ${item.birimLabel}'), backgroundColor: Colors.red));
                   return;
                 }
                 setState(() => _isProcessing = true);
@@ -1402,7 +1402,7 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                   _refresh();
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('\${item.gubreAdi} - \${_formatMiktar(miktar)} \${item.birimLabel} yaprak gübre uygulandı ✓'),
+                      content: Text('${item.gubreAdi} - ${_formatMiktar(miktar)} ${item.birimLabel} yaprak gübre uygulandı ✓'),
                       backgroundColor: Colors.teal,
                     ));
                   }

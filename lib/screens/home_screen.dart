@@ -1211,7 +1211,10 @@ class DashboardTab extends StatelessWidget {
                 final sembol = paraBirimi == 'EUR' ? '€' : paraBirimi == 'USD' ? '\$' : '₺';
                 final kasaFmt = NumberFormat.currency(locale: 'tr_TR', symbol: sembol);
 
-                return Container(
+                return InkWell(
+                  onTap: () => _showKasaHareketleri(context, provider, kasa, paraBirimi),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -1270,11 +1273,110 @@ class DashboardTab extends StatelessWidget {
                       ),
                     ],
                   ),
-                );
+                ));
               }),
           ],
         ),
       ),
+    );
+  }
+
+  /// Bir kasaya tiklaninca sadece o kasaya ait hareketleri gosteren alt panel
+  void _showKasaHareketleri(
+    BuildContext context,
+    AppProvider provider,
+    String kasa,
+    String paraBirimi,
+  ) {
+    final sembol = paraBirimi == 'EUR' ? '\u20ac' : paraBirimi == 'USD' ? '\u0024' : '\u20ba';
+    final fmt = NumberFormat.currency(locale: 'tr_TR', symbol: sembol);
+    final dateFormat = DateFormat('dd.MM.yyyy');
+
+    final hareketler = provider.kasaHareketleri
+        .where((h) => h.kasa == kasa)
+        .toList()
+      ..sort((a, b) => b.tarih.compareTo(a.tarih));
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (ctx, scrollController) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet, color: Colors.blue),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '$kasa Hareketleri',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      Text(
+                        '${hareketler.length} i\u015Flem',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: hareketler.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Bu kasada islem yok',
+                            style: TextStyle(color: Colors.grey.shade600),
+                          ),
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: hareketler.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final h = hareketler[i];
+                            final isGiris = h.islemTipi == 'Giri\u015f';
+                            final color = isGiris ? Colors.green : Colors.red;
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: CircleAvatar(
+                                backgroundColor: color.withValues(alpha: 0.1),
+                                child: Icon(
+                                  isGiris ? Icons.arrow_upward : Icons.arrow_downward,
+                                  color: color,
+                                  size: 20,
+                                ),
+                              ),
+                              title: Text(h.aciklama, style: const TextStyle(fontSize: 14)),
+                              subtitle: Text(
+                                '${dateFormat.format(h.tarih)} \u2022 ${h.islemKaynagiLabel}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              trailing: Text(
+                                '${isGiris ? '+' : '-'}${fmt.format(h.tutar)}',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: color),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

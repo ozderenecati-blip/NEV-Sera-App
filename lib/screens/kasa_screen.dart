@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../providers/app_provider.dart';
 import '../providers/theme_provider.dart';
 import '../models/kasa_hareketi.dart';
+import '../models/gundelikci.dart';
 import '../models/kredi.dart';
 import '../services/currency_service.dart';
 import '../services/excel_service.dart';
@@ -60,6 +61,88 @@ class _KasaScreenState extends State<KasaScreen> {
     }
   }
 
+  /// Aranabilir gündelikçi/şahıs seçici — isimle filtreleyerek hızlı seçim
+  Future<Gundelikci?> _showGundelikciSecici(
+    BuildContext context,
+    AppProvider provider,
+  ) {
+    final tumListe = [...provider.gundelikciler]
+      ..sort((a, b) =>
+          a.adSoyad.toLowerCase().compareTo(b.adSoyad.toLowerCase()));
+    String arama = '';
+    return showModalBottomSheet<Gundelikci>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final filtre = arama.trim().toLowerCase();
+            final liste = filtre.isEmpty
+                ? tumListe
+                : tumListe
+                    .where((g) =>
+                        g.adSoyad.toLowerCase().contains(filtre) ||
+                        (g.tcNo?.toLowerCase().contains(filtre) ?? false))
+                    .toList();
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.6,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: TextField(
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Çalışan ara',
+                          hintText: 'İsim veya TC No',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) => setSheetState(() => arama = v),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: liste.isEmpty
+                          ? Center(
+                              child: Text(
+                                'Sonuç bulunamadı',
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                            )
+                          : ListView.builder(
+                              itemCount: liste.length,
+                              itemBuilder: (ctx, i) {
+                                final g = liste[i];
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: Colors.orange.shade100,
+                                    child: const Icon(Icons.person,
+                                        color: Colors.orange),
+                                  ),
+                                  title: Text(g.adSoyad),
+                                  subtitle: (g.tcNo != null && g.tcNo!.isNotEmpty)
+                                      ? Text('TC: ${g.tcNo}')
+                                      : null,
+                                  onTap: () => Navigator.pop(ctx, g),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
   List<KasaHareketi> _filterHareketler(List<KasaHareketi> hareketler) {
     return hareketler.where((h) {
       // Arama
@@ -1560,29 +1643,39 @@ class _KasaScreenState extends State<KasaScreen> {
 
                             // Gündelikçi seçimi
                             if (islemKaynagi == 'gider_pusulasi') ...[
-                              DropdownButtonFormField<int>(
-                                value: selectedGundelikciId,
-                                decoration: const InputDecoration(
-                                  labelText: 'Çalışan *',
-                                  border: OutlineInputBorder(),
-                                  prefixIcon: Icon(Icons.person),
-                                ),
-                                items:
-                                    ([...provider.gundelikciler]
-                                      ..sort((a, b) => a.adSoyad.toLowerCase().compareTo(b.adSoyad.toLowerCase())))
-                                        .map(
-                                          (g) => DropdownMenuItem(
-                                            value: g.id,
-                                            child: Text(g.adSoyad),
-                                          ),
-                                        )
-                                        .toList(),
-                                onChanged:
-                                    (v) => setModalState(() {
-                                      selectedGundelikciId = v;
+                              InkWell(
+                                onTap: () async {
+                                  final secilen = await _showGundelikciSecici(context, provider);
+                                  if (secilen != null) {
+                                    setModalState(() {
+                                      selectedGundelikciId = secilen.id;
                                       aciklamaController.text =
-                                          'Gündelik ücreti - ${provider.gundelikciler.firstWhere((g) => g.id == v).adSoyad}';
-                                    }),
+                                          'Gündelik ücreti - ${secilen.adSoyad}';
+                                    });
+                                  }
+                                },
+                                child: InputDecorator(
+                                  decoration: const InputDecoration(
+                                    labelText: 'Çalışan *',
+                                    border: OutlineInputBorder(),
+                                    prefixIcon: Icon(Icons.person),
+                                    suffixIcon: Icon(Icons.search),
+                                  ),
+                                  child: Text(
+                                    selectedGundelikciId == null
+                                        ? 'Çalışan seçin'
+                                        : (provider.gundelikciler
+                                                .where((g) => g.id == selectedGundelikciId)
+                                                .firstOrNull
+                                                ?.adSoyad ??
+                                            'Çalışan seçin'),
+                                    style: TextStyle(
+                                      color: selectedGundelikciId == null
+                                          ? Colors.grey.shade600
+                                          : null,
+                                    ),
+                                  ),
+                                ),
                               ),
                               const SizedBox(height: 16),
                             ],

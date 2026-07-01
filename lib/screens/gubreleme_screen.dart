@@ -1052,7 +1052,10 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
                     if (user == null) return;
                     for (final r in katlanmisRecete) {
                       final envItem = _envanter.where((e) => e.gubreAdi.toLowerCase() == r.gubreAdi.toLowerCase() && e.bahceId == _seciliBahceId).firstOrNull;
-                      if (envItem != null) await _service.envanterdenDus(envItem.id!, r.miktar);
+                      if (envItem != null) {
+                        final dusulecek = gubreMiktarCevir(r.miktar, r.birim, envItem.birim);
+                        await _service.envanterdenDus(envItem.id!, dusulecek);
+                      }
                     }
                     await _service.addKatlamaKaydi(KatlamaKaydi(
                       bahceId: _seciliBahceId!, bahceAdi: _seciliBahceAdi!,
@@ -1487,7 +1490,8 @@ class _GubrelemeScreenState extends State<GubrelemeScreen>
         for (final g in kayit.kullanilanGubreler) {
           final envItem = _envanter.where((e) => e.gubreAdi.toLowerCase() == g.gubreAdi.toLowerCase() && e.bahceId == kayit.bahceId).firstOrNull;
           if (envItem != null) {
-            await _service.updateEnvanter(envItem.copyWith(miktar: envItem.miktar + g.miktar));
+            final eklenecek = gubreMiktarCevir(g.miktar, g.birim, envItem.birim);
+            await _service.updateEnvanter(envItem.copyWith(miktar: envItem.miktar + eklenecek));
           }
         }
       }

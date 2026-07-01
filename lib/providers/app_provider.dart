@@ -220,7 +220,29 @@ class AppProvider extends ChangeNotifier {
 
   Future<bool> deleteKasaHareketi(int id) async {
     try {
+      // Silinecek hareketi bul (transfer ise karşı bacağını da silmek için)
+      final eslesenler = _kasaHareketleri.where((h) => h.id == id).toList();
+      final hareket = eslesenler.isNotEmpty ? eslesenler.first : null;
+
       await _db.deleteKasaHareketi(id);
+
+      // Kasa transferi çift kayıt oluşturur (kaynaktan çıkış + hedefe giriş).
+      // Bir bacağı silinince diğeri kalıp bakiyeyi bozar; eşleşen bacağı da sil.
+      if (hareket != null && hareket.islemKaynagi == 'kasa_transfer') {
+        final karsi = _kasaHareketleri.where((h) =>
+            h.id != id &&
+            h.islemKaynagi == 'kasa_transfer' &&
+            h.islemTipi != hareket.islemTipi &&
+            h.tarih == hareket.tarih &&
+            hareket.kasa != null &&
+            h.kasa != null &&
+            h.aciklama.contains(hareket.kasa!) &&
+            hareket.aciklama.contains(h.kasa!)).toList();
+        if (karsi.isNotEmpty && karsi.first.id != null) {
+          await _db.deleteKasaHareketi(karsi.first.id!);
+        }
+      }
+
       await loadKasaHareketleri();
       await loadGundelikciler();
       await loadCariler();

@@ -5,6 +5,16 @@ enum GubreBirim {
   litre,
 }
 
+/// Bir gübre miktarını [kaynak] biriminden [hedef] birimine çevirir.
+/// Sadece kg <-> gram dönüşümü desteklenir (1 kg = 1000 g).
+/// Diğer birim kombinasyonlarında (ör. litre) miktar olduğu gibi döner.
+double gubreMiktarCevir(double miktar, GubreBirim kaynak, GubreBirim hedef) {
+  if (kaynak == hedef) return miktar;
+  if (kaynak == GubreBirim.kg && hedef == GubreBirim.gram) return miktar * 1000;
+  if (kaynak == GubreBirim.gram && hedef == GubreBirim.kg) return miktar / 1000;
+  return miktar;
+}
+
 /// Reçete kalemi — bir tankta kullanılacak gübre ve miktarı
 class ReceteKalemi {
   final String gubreAdi;

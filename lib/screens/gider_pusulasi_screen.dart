@@ -894,7 +894,7 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
 
     try {
       final excelService = ExcelService();
-      await excelService.exportToExcel(pusulalar);
+      await excelService.exportGiderPusulasi(pusulalar, provider.gundelikciler);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Excel dosyası indirildi ✓'), backgroundColor: Colors.green),

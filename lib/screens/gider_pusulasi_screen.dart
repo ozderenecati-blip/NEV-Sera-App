@@ -878,15 +878,12 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
   // =================== EXCEL EXPORT ===================
   Future<void> _exportExcel(BuildContext context) async {
     final provider = Provider.of<AppProvider>(context, listen: false);
-    final pusulalar = provider.kasaHareketleri
-        .where((h) => h.islemKaynagi == 'resmilestirme')
-        .toList()
-      ..sort((a, b) => b.tarih.compareTo(a.tarih));
+    final gundelikciler = provider.gundelikciler;
 
-    if (pusulalar.isEmpty) {
+    if (gundelikciler.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Dışa aktarılacak pusula bulunamadı'), backgroundColor: Colors.orange),
+          const SnackBar(content: Text('Dışa aktarılacak çalışan bulunamadı'), backgroundColor: Colors.orange),
         );
       }
       return;
@@ -894,7 +891,7 @@ class _GiderPusulasiScreenState extends State<GiderPusulasiScreen> with SingleTi
 
     try {
       final excelService = ExcelService();
-      await excelService.exportGiderPusulasi(pusulalar, provider.gundelikciler);
+      await excelService.exportGiderPusulasi(gundelikciler, provider.kasaHareketleri);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Excel dosyası indirildi ✓'), backgroundColor: Colors.green),

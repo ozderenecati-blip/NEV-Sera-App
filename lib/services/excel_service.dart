@@ -93,8 +93,8 @@ class ExcelService {
   
   /// Gider pusulası dışa aktarımı — kişilerin tüm bilgileriyle (TC, adres, telefon)
   Future<void> exportGiderPusulasi(
-    List<KasaHareketi> pusulalar,
     List<Gundelikci> gundelikciler,
+    List<KasaHareketi> hareketler,
   ) async {
     final excel = Excel.createExcel();
     final sheet = excel['Gider Pusulası'];
@@ -104,13 +104,10 @@ class ExcelService {
       'TC No',
       'Telefon',
       'Adres',
-      'Tarih',
-      'Açıklama',
-      'Meblağ',
-      'Para Birimi',
-      'TL Karşılığı',
-      'Kasa',
-      'Notlar',
+      'Verilen Avans (TL)',
+      'Kesilen Pusula (TL)',
+      'Açıkta Kalan / Bize Borç (TL)',
+      'Durum',
     ];
 
     for (var i = 0; i < headers.length; i++) {
@@ -123,39 +120,67 @@ class ExcelService {
       );
     }
 
-    final dateFormat = DateFormat('dd.MM.yyyy');
+    final sorted = [...gundelikciler]
+      ..sort((a, b) => a.adSoyad.toLowerCase().compareTo(b.adSoyad.toLowerCase()));
 
-    for (var i = 0; i < pusulalar.length; i++) {
-      final h = pusulalar[i];
+    double genelAvans = 0;
+    double genelResmilestirme = 0;
+    double genelKalan = 0;
+
+    for (var i = 0; i < sorted.length; i++) {
+      final g = sorted[i];
       final row = i + 1;
-      final g = gundelikciler
-          .cast<Gundelikci?>()
-          .firstWhere((x) => x?.id == h.iliskiliId, orElse: () => null);
 
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(g?.adSoyad ?? 'Bilinmiyor');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(g?.tcNo ?? '');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(g?.telefon ?? '');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(g?.adres ?? '');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = TextCellValue(dateFormat.format(h.tarih));
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = TextCellValue(h.aciklama);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = DoubleCellValue(h.tutar);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(h.paraBirimi);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: row)).value = DoubleCellValue(h.tlKarsiligi ?? h.tutar);
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: row)).value = TextCellValue(h.kasa ?? '');
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: row)).value = TextCellValue(h.notlar ?? '');
+      final toplamAvans = hareketler
+          .where((h) => h.islemKaynagi == 'gider_pusulasi' && h.iliskiliId == g.id)
+          .fold<double>(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
+      final toplamResmilestirme = hareketler
+          .where((h) => h.islemKaynagi == 'resmilestirme' && h.iliskiliId == g.id)
+          .fold<double>(0, (sum, h) => sum + (h.tlKarsiligi ?? h.tutar));
+      final kalanBorc = toplamAvans - toplamResmilestirme;
+
+      genelAvans += toplamAvans;
+      genelResmilestirme += toplamResmilestirme;
+      genelKalan += kalanBorc;
+
+      String durum;
+      if (kalanBorc > 0.001) {
+        durum = 'Bize borçlu';
+      } else if (kalanBorc < -0.001) {
+        durum = 'Fazla pusula kesilmiş';
+      } else {
+        durum = 'Borç yok';
+      }
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row)).value = TextCellValue(g.adSoyad);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value = TextCellValue(g.tcNo ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: row)).value = TextCellValue(g.telefon ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: row)).value = TextCellValue(g.adres ?? '');
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: row)).value = DoubleCellValue(toplamAvans);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: row)).value = DoubleCellValue(toplamResmilestirme);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: row)).value = DoubleCellValue(kalanBorc);
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: row)).value = TextCellValue(durum);
     }
 
-    sheet.setColumnWidth(0, 22);
+    final totalRow = sorted.length + 1;
+    final totalCell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: totalRow));
+    totalCell.value = TextCellValue('TOPLAM');
+    totalCell.cellStyle = CellStyle(bold: true);
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: totalRow)).value = DoubleCellValue(genelAvans);
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: totalRow)).value = DoubleCellValue(genelResmilestirme);
+    sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: totalRow)).value = DoubleCellValue(genelKalan);
+    for (final c in [4, 5, 6]) {
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: totalRow)).cellStyle = CellStyle(bold: true);
+    }
+
+    sheet.setColumnWidth(0, 24);
     sheet.setColumnWidth(1, 15);
     sheet.setColumnWidth(2, 15);
-    sheet.setColumnWidth(3, 35);
-    sheet.setColumnWidth(4, 12);
-    sheet.setColumnWidth(5, 30);
-    sheet.setColumnWidth(6, 14);
-    sheet.setColumnWidth(7, 12);
-    sheet.setColumnWidth(8, 15);
-    sheet.setColumnWidth(9, 15);
-    sheet.setColumnWidth(10, 25);
+    sheet.setColumnWidth(3, 38);
+    sheet.setColumnWidth(4, 18);
+    sheet.setColumnWidth(5, 18);
+    sheet.setColumnWidth(6, 26);
+    sheet.setColumnWidth(7, 20);
 
     excel.delete('Sheet1');
 

@@ -395,6 +395,7 @@ class _HasatScreenState extends State<HasatScreen>
                 'satis': 0.0,
               });
       s['satis'] = (s['satis'] as double) + sat.miktar;
+      (s.putIfAbsent('satisListe', () => <Satis>[]) as List<Satis>).add(sat);
     }
 
     if (stok.isEmpty) {
@@ -428,30 +429,113 @@ class _HasatScreenState extends State<HasatScreen>
           final hasat = s['hasat'] as double;
           final satis = s['satis'] as double;
           final kalan = hasat - satis;
+          final satisListe =
+              ((s['satisListe'] as List<Satis>?) ?? const <Satis>[]).toList()
+                ..sort((a, b) => b.tarih.compareTo(a.tarih));
+          final toplamCiro = satisListe.fold<double>(
+              0, (t, x) => t + (x.tlKarsiligi ?? x.toplamTutar));
+          final ortFiyat = satis > 0 ? toplamCiro / satis : null;
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(s['urun'] as String,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15)),
-                  const SizedBox(height: 8),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              shape: const Border(),
+              title: Text(s['urun'] as String,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _stokKolon('Hasat', hasat, s['birim'] as String,
+                        Colors.green),
+                    _stokKolon('Satış', satis, s['birim'] as String,
+                        Colors.red),
+                    _stokKolon('Kalan', kalan, s['birim'] as String,
+                        kalan < 0 ? Colors.orange : const Color(0xFFD97706)),
+                  ],
+                ),
+              ),
+              children: [
+                if (satisListe.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4),
+                    child: Text('Bu ürün için satış kaydı yok',
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  )
+                else ...[
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _stokKolon('Hasat', hasat, s['birim'] as String,
-                          Colors.green),
-                      _stokKolon('Satış', satis, s['birim'] as String,
-                          Colors.red),
-                      _stokKolon('Kalan', kalan, s['birim'] as String,
-                          kalan < 0 ? Colors.orange : const Color(0xFFD97706)),
+                      Text(
+                        'Toplam Ciro: ${_numFormat.format(toplamCiro)} ₺',
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      if (ortFiyat != null)
+                        Text(
+                          'Ort. Fiyat: ${_numFormat.format(ortFiyat)} ₺/${s['birim']}',
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
                     ],
                   ),
+                  const Divider(height: 16),
+                  ...satisListe.map((sat) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(_dateFormat.format(sat.tarih),
+                                      style: const TextStyle(fontSize: 12)),
+                                  if ((sat.musteriUnvan ?? '').isNotEmpty)
+                                    Text(sat.musteriUnvan!,
+                                        style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey),
+                                        overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                '${_numFormat.format(sat.miktar)} ${sat.birim}',
+                                style: const TextStyle(fontSize: 12),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                '${_numFormat.format(sat.birimFiyat)} ${sat.paraBirimi}',
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.grey),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                _numFormat
+                                    .format(sat.tlKarsiligi ?? sat.toplamTutar),
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold),
+                                textAlign: TextAlign.right,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
                 ],
-              ),
+              ],
             ),
           );
         }),

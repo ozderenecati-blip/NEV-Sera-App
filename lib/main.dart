@@ -4,6 +4,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'providers/app_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
@@ -36,6 +37,17 @@ void main() async {
       ),
     );
     print('Firebase initialized successfully');
+
+    // Offline cache: veriler cihazda saklanir, tekrar acilista aninda gelir,
+    // sonra arka planda sunucudan guncellenir. Mobilde ozellikle hizlandirir.
+    try {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+    } catch (e) {
+      print('Firestore cache settings error: $e');
+    }
   } catch (e) {
     print('Firebase initialization error: $e');
   }

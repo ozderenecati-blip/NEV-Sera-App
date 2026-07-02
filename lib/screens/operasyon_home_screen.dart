@@ -7,6 +7,7 @@ import 'bahce_yonetimi_screen.dart';
 import 'gorev_yonetimi_screen.dart';
 import 'daily_work_report_screen.dart';
 import 'gubreleme_screen.dart';
+import 'hasat_screen.dart';
 
 class OperasyonHomeScreen extends StatefulWidget {
   const OperasyonHomeScreen({super.key});
@@ -28,6 +29,7 @@ class _OperasyonHomeScreenState extends State<OperasyonHomeScreen> {
       const GorevYonetimiScreen(),
       const DailyWorkReportScreen(),
       const GubrelemeScreen(),
+      const HasatScreen(),
     ];
 
     return Scaffold(
@@ -122,6 +124,11 @@ class _OperasyonHomeScreenState extends State<OperasyonHomeScreen> {
                 icon: const Icon(Icons.science_outlined, size: 24),
                 selectedIcon: Icon(Icons.science, size: 24, color: const Color(0xFFD97706)),
                 label: 'Gübreleme',
+              ),
+              NavigationDestination(
+                icon: const Icon(Icons.eco_outlined, size: 24),
+                selectedIcon: Icon(Icons.eco, size: 24, color: const Color(0xFFD97706)),
+                label: 'Hasat',
               ),
             ],
           ),

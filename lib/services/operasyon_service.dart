@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../models/bahce.dart';
+import '../models/hasat.dart';
 import '../models/gorev.dart';
 import '../models/daily_work_report.dart';
 import '../models/gubre.dart';
@@ -72,6 +73,62 @@ class OperasyonService {
       return true;
     } catch (e) {
       debugPrint('deleteBahce error: $e');
+      return false;
+    }
+  }
+
+  // ==================== HASAT ====================
+
+  CollectionReference get _hasatlarRef => _db.collection('hasatlar');
+
+  Future<List<Hasat>> getHasatlar({String? bahceId, String? parselId}) async {
+    try {
+      Query query = _hasatlarRef;
+      if (bahceId != null) {
+        query = query.where('bahce_id', isEqualTo: bahceId);
+      }
+      final snapshot = await query.get();
+      var list = snapshot.docs.map((doc) {
+        return Hasat.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id);
+      }).toList();
+      if (parselId != null) {
+        list = list.where((h) => h.parselId == parselId).toList();
+      }
+      list.sort((a, b) => b.tarih.compareTo(a.tarih));
+      return list;
+    } catch (e) {
+      debugPrint('getHasatlar error: $e');
+      return [];
+    }
+  }
+
+  Future<String?> addHasat(Hasat hasat) async {
+    try {
+      final doc = await _hasatlarRef.add(hasat.toMap());
+      return doc.id;
+    } catch (e) {
+      debugPrint('addHasat error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateHasat(Hasat hasat) async {
+    if (hasat.id == null) return false;
+    try {
+      await _hasatlarRef.doc(hasat.id).update(hasat.toMap());
+      return true;
+    } catch (e) {
+      debugPrint('updateHasat error: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteHasat(String id) async {
+    try {
+      await _hasatlarRef.doc(id).delete();
+      return true;
+    } catch (e) {
+      debugPrint('deleteHasat error: $e');
       return false;
     }
   }

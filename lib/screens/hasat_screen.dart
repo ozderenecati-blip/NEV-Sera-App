@@ -184,6 +184,21 @@ class _HasatScreenState extends State<HasatScreen>
         ),
       );
 
+  String _norm(String s) => s.trim().toLowerCase();
+
+  /// Parselin guncel saksi sayisi (ada gore eslestirme - id kaydedilmiyor)
+  double? _parselSaksi(String? bahceId, String parselAd) {
+    for (final b in _bahceler) {
+      if (bahceId != null && bahceId.isNotEmpty && b.id != bahceId) continue;
+      for (final p in b.parseller) {
+        if (_norm(p.ad) == _norm(parselAd)) {
+          return p.toplamSaksi > 0 ? p.toplamSaksi.toDouble() : null;
+        }
+      }
+    }
+    return null;
+  }
+
   // ==================== KAYITLAR ====================
   Widget _buildKayitlarTab() {
     final hasatlar = _seciliHasatlar;
@@ -214,6 +229,11 @@ class _HasatScreenState extends State<HasatScreen>
         itemCount: hasatlar.length,
         itemBuilder: (context, i) {
           final h = hasatlar[i];
+          final canliSaksi =
+              _parselSaksi(h.bahceId, h.parselAd) ?? h.saksiSayisi;
+          final verim = (canliSaksi != null && canliSaksi > 0)
+              ? h.miktar / canliSaksi
+              : null;
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -230,9 +250,9 @@ class _HasatScreenState extends State<HasatScreen>
                   if (h.kalite != null && h.kalite!.isNotEmpty)
                     Text('Kalite: ${h.kalite}',
                         style: const TextStyle(fontSize: 12)),
-                  if (h.verimSaksiBasi != null)
+                  if (verim != null)
                     Text(
-                        'Verim: ${_numFormat.format(h.verimSaksiBasi)} ${h.birim}/saksı',
+                        'Verim: ${_numFormat.format(verim)} ${h.birim}/saksı',
                         style: const TextStyle(
                             fontSize: 12, color: Color(0xFFD97706))),
                   if (h.not != null && h.not!.isNotEmpty)
@@ -270,22 +290,22 @@ class _HasatScreenState extends State<HasatScreen>
   // ==================== VERIM ====================
   Widget _buildVerimTab() {
     final hasatlar = _seciliHasatlar;
-    if (hasatlar.isEmpty) {
+    final bahce = _seciliBahce;
+    if (hasatlar.isEmpty &&
+        (bahce == null || bahce.parseller.isEmpty)) {
       return const Center(
           child: Text('Bu bahçede veri yok',
               style: TextStyle(color: Colors.grey)));
     }
-    final bahce = _seciliBahce;
 
-    // parsel+ürün+birim bazlı grupla
+    // parsel adi + urun + birim bazli grupla (parsel id kaydedilmedigi icin ada gore)
     final Map<String, Map<String, dynamic>> gruplar = {};
     for (final h in hasatlar) {
-      final key = '${h.parselId}|${h.urun}|${h.birim}';
+      final key = '${_norm(h.parselAd)}|${_norm(h.urun)}|${h.birim}';
       final g = gruplar.putIfAbsent(
           key,
           () => {
                 'parsel': h.parselAd,
-                'parselId': h.parselId,
                 'urun': h.urun,
                 'birim': h.birim,
                 'toplam': 0.0,
@@ -295,21 +315,36 @@ class _HasatScreenState extends State<HasatScreen>
       g['adet'] = (g['adet'] as int) + 1;
     }
 
+    // Hasadi olmayan parselleri de listeye ekle (0 hasatla)
+    if (bahce != null) {
+      for (final p in bahce.parseller) {
+        final varMi = gruplar.keys
+            .any((k) => k.startsWith('${_norm(p.ad)}|'));
+        if (!varMi) {
+          gruplar['${_norm(p.ad)}|__yok__'] = {
+            'parsel': p.ad,
+            'urun': (p.cins ?? '').isNotEmpty ? p.cins! : '-',
+            'birim': 'kg',
+            'toplam': 0.0,
+            'adet': 0,
+          };
+        }
+      }
+    }
+
     final rows = gruplar.values.toList()
-      ..sort((a, b) => (b['toplam'] as double).compareTo(a['toplam'] as double));
+      ..sort((a, b) {
+        final t = (b['toplam'] as double).compareTo(a['toplam'] as double);
+        if (t != 0) return t;
+        return (a['parsel'] as String)
+            .toLowerCase()
+            .compareTo((b['parsel'] as String).toLowerCase());
+      });
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       children: rows.map((g) {
-        double? saksi;
-        if (bahce != null) {
-          for (final p in bahce.parseller) {
-            if (p.id == g['parselId']) {
-              saksi = p.toplamSaksi.toDouble();
-              break;
-            }
-          }
-        }
+        final saksi = _parselSaksi(_seciliBahceId, g['parsel'] as String);
         final toplam = g['toplam'] as double;
         final verim =
             (saksi != null && saksi > 0) ? toplam / saksi : null;
@@ -371,7 +406,7 @@ class _HasatScreenState extends State<HasatScreen>
     String norm(String s) => s.trim().toLowerCase();
 
     for (final h in _tumHasatlar) {
-      final key = norm(h.urun);
+      final key = '${norm(h.urun)}|${h.birim}';
       if (key.isEmpty) continue;
       final s = stok.putIfAbsent(
           key,
@@ -384,7 +419,7 @@ class _HasatScreenState extends State<HasatScreen>
       s['hasat'] = (s['hasat'] as double) + h.miktar;
     }
     for (final sat in _satislar) {
-      final key = norm(sat.urunAdi);
+      final key = '${norm(sat.urunAdi)}|${sat.birim}';
       if (key.isEmpty) continue;
       final s = stok.putIfAbsent(
           key,
@@ -420,7 +455,7 @@ class _HasatScreenState extends State<HasatScreen>
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Text(
-            'Kalan = Toplam Hasat − Toplam Satış. Ürünler ada göre eşleştirilir; '
+            'Kalan = Toplam Hasat − Toplam Satış. Ürünler ad + birim bazında eşleştirilir; '
             'hasat ve satış birimlerinin aynı olmasına dikkat edin.',
             style: TextStyle(fontSize: 12, color: Colors.black87),
           ),
@@ -441,7 +476,7 @@ class _HasatScreenState extends State<HasatScreen>
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
               shape: const Border(),
-              title: Text(s['urun'] as String,
+              title: Text('${s['urun']} (${s['birim']})',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 15)),
               subtitle: Padding(

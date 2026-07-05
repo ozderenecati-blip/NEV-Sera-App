@@ -1007,6 +1007,7 @@ class DatabaseService {
   Future<List<Satis>> getSatislar({int? musteriId, DateTime? baslangic, DateTime? bitis}) async {
     try {
       final snapshot = await _db.collection('satislar').get();
+      final musteriler = await getMusteriler(sadecAktif: false);
       List<Satis> list = snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] = _getIntId('satislar', doc.id);
@@ -1015,6 +1016,12 @@ class DatabaseService {
           if (musteriDocId != null && musteriDocId.isNotEmpty) {
             data['musteri_id'] = _getIntId('musteriler', musteriDocId);
           }
+        // Musteri unvanini ekle (tahsilatlardaki gibi)
+        final mId = data['musteri_id'];
+        final musteri = musteriler.where((m) => m.id == mId).firstOrNull;
+        if (musteri != null) {
+          data['musteri_unvan'] = musteri.unvan;
+        }
         return Satis.fromMap(data);
       }).toList();
       

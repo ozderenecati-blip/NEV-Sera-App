@@ -3,6 +3,7 @@ enum UserRole {
   admin,              // Ortaklar - Full yetki (Finans + Operasyon)
   operasyonYoneticisi, // Operasyon yöneticisi - Operasyon full yetki
   calisan,            // Çalışan - Read-only + görev tamamla + daily report
+  boardMember,        // Yönetim Kurulu - Tüm verileri görür, hiçbir şeyi değiştiremez
 }
 
 class AppUser {
@@ -28,11 +29,17 @@ class AppUser {
     DateTime? olusturmaTarihi,
   }) : olusturmaTarihi = olusturmaTarihi ?? DateTime.now();
 
+  /// Kullanıcı salt-okunur mu? (Board Member hiçbir veriyi değiştiremez)
+  bool get isReadOnly => rol == UserRole.boardMember;
+
   /// Kullanıcı finans modülüne erişebilir mi?
-  bool get canAccessFinans => rol == UserRole.admin;
+  bool get canAccessFinans => rol == UserRole.admin || rol == UserRole.boardMember;
   
   /// Kullanıcı operasyon modülüne erişebilir mi?
   bool get canAccessOperasyon => true; // Herkes erişebilir
+  
+  /// Kullanıcı finans verilerinde yazma yetkisi var mı?
+  bool get canWriteFinans => rol == UserRole.admin;
   
   /// Kullanıcı operasyonda yazma yetkisi var mı?
   bool get canWriteOperasyon => rol == UserRole.admin || rol == UserRole.operasyonYoneticisi;
@@ -41,10 +48,10 @@ class AppUser {
   bool get canAssignTask => rol == UserRole.admin || rol == UserRole.operasyonYoneticisi;
   
   /// Kullanıcı görev tamamlayabilir mi?
-  bool get canCompleteTask => true; // Herkes kendi görevini tamamlayabilir
+  bool get canCompleteTask => rol != UserRole.boardMember;
   
   /// Kullanıcı daily report yazabilir mi?
-  bool get canWriteDailyReport => true; // Herkes yazabilir
+  bool get canWriteDailyReport => rol != UserRole.boardMember;
   
   /// Kullanıcı daily report verify edebilir mi?
   bool get canVerifyDailyReport => rol == UserRole.admin || rol == UserRole.operasyonYoneticisi;
@@ -56,12 +63,14 @@ class AppUser {
     UserRole.admin => 'Admin / Ortak',
     UserRole.operasyonYoneticisi => 'Operasyon Yöneticisi',
     UserRole.calisan => 'Çalışan',
+    UserRole.boardMember => 'Yönetim Kurulu Üyesi',
   };
 
   String get rolIcon => switch (rol) {
     UserRole.admin => '👑',
     UserRole.operasyonYoneticisi => '🌱',
     UserRole.calisan => '👷',
+    UserRole.boardMember => '📊',
   };
 
   Map<String, dynamic> toMap() {

@@ -20,9 +20,11 @@ class AuthProvider extends ChangeNotifier {
   bool get canAccessFinans => _currentUser?.canAccessFinans ?? false;
   bool get canAccessOperasyon => _currentUser?.canAccessOperasyon ?? false;
   bool get canManageUsers => _currentUser?.canManageUsers ?? false;
+  bool get canWriteFinans => _currentUser?.canWriteFinans ?? false;
   bool get canWriteOperasyon => _currentUser?.canWriteOperasyon ?? false;
   bool get canAssignTask => _currentUser?.canAssignTask ?? false;
   bool get canVerifyDailyReport => _currentUser?.canVerifyDailyReport ?? false;
+  bool get isReadOnly => _currentUser?.isReadOnly ?? false;
 
   /// Uygulama başlangıcında varsayılan kullanıcıları kontrol et
   Future<void> initialize() async {

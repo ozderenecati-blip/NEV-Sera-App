@@ -7,6 +7,7 @@ import '../models/hasat.dart';
 import '../models/gorev.dart';
 import '../models/daily_work_report.dart';
 import '../models/gubre.dart';
+import 'auth_service.dart';
 
 /// Operasyon modülü Firestore CRUD servisi
 class OperasyonService {
@@ -15,6 +16,9 @@ class OperasyonService {
   OperasyonService._internal();
 
   FirebaseFirestore get _db => FirebaseFirestore.instance;
+
+  /// Board Member (salt-okunur) kullanicilar icin merkezi yazma engeli
+  bool get _readOnlyBlocked => AuthService().currentUser?.isReadOnly ?? false;
 
   // ==================== BAHÇE ====================
 
@@ -47,6 +51,7 @@ class OperasyonService {
   }
 
   Future<String?> addBahce(Bahce bahce) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _bahcelerRef.add(bahce.toMap());
       return doc.id;
@@ -57,6 +62,7 @@ class OperasyonService {
   }
 
   Future<bool> updateBahce(Bahce bahce) async {
+    if (_readOnlyBlocked) return false;
     if (bahce.id == null) return false;
     try {
       await _bahcelerRef.doc(bahce.id).update(bahce.toMap());
@@ -68,6 +74,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteBahce(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _bahcelerRef.doc(id).delete();
       return true;
@@ -103,6 +110,7 @@ class OperasyonService {
   }
 
   Future<String?> addHasat(Hasat hasat) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _hasatlarRef.add(hasat.toMap());
       return doc.id;
@@ -113,6 +121,7 @@ class OperasyonService {
   }
 
   Future<bool> updateHasat(Hasat hasat) async {
+    if (_readOnlyBlocked) return false;
     if (hasat.id == null) return false;
     try {
       await _hasatlarRef.doc(hasat.id).update(hasat.toMap());
@@ -124,6 +133,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteHasat(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _hasatlarRef.doc(id).delete();
       return true;
@@ -174,6 +184,7 @@ class OperasyonService {
   }
 
   Future<String?> addGorev(Gorev gorev) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _gorevlerRef.add(gorev.toMap());
       return doc.id;
@@ -184,6 +195,7 @@ class OperasyonService {
   }
 
   Future<bool> updateGorev(Gorev gorev) async {
+    if (_readOnlyBlocked) return false;
     if (gorev.id == null) return false;
     try {
       await _gorevlerRef.doc(gorev.id).update(gorev.toMap());
@@ -195,6 +207,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteGorev(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _gorevlerRef.doc(id).delete();
       return true;
@@ -287,6 +300,7 @@ class OperasyonService {
   }
 
   Future<String?> addDailyReport(DailyWorkReport report) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _reportsRef.add(report.toMap());
       return doc.id;
@@ -297,6 +311,7 @@ class OperasyonService {
   }
 
   Future<bool> updateDailyReport(DailyWorkReport report) async {
+    if (_readOnlyBlocked) return false;
     if (report.id == null) return false;
     // Onaylanmış rapor değiştirilemez
     if (report.kilitli) return false;
@@ -327,6 +342,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteDailyReport(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _reportsRef.doc(id).delete();
       return true;
@@ -359,6 +375,7 @@ class OperasyonService {
   }
 
   Future<String?> addTank(GubreTank tank) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _tanklarRef.add(tank.toMap());
       return doc.id;
@@ -369,6 +386,7 @@ class OperasyonService {
   }
 
   Future<bool> updateTank(GubreTank tank) async {
+    if (_readOnlyBlocked) return false;
     if (tank.id == null) return false;
     try {
       await _tanklarRef.doc(tank.id).update(tank.toMap());
@@ -380,6 +398,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteTank(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _tanklarRef.doc(id).delete();
       return true;
@@ -412,6 +431,7 @@ class OperasyonService {
   }
 
   Future<String?> addEnvanter(GubreEnvanter envanter) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _envanterRef.add(envanter.toMap());
       return doc.id;
@@ -422,6 +442,7 @@ class OperasyonService {
   }
 
   Future<bool> updateEnvanter(GubreEnvanter envanter) async {
+    if (_readOnlyBlocked) return false;
     if (envanter.id == null) return false;
     try {
       await _envanterRef.doc(envanter.id).update(envanter.toMap());
@@ -433,6 +454,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteEnvanter(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _envanterRef.doc(id).delete();
       return true;
@@ -445,6 +467,7 @@ class OperasyonService {
 
   /// Gübre referans görseli yükle (Firebase Storage)
   Future<String?> uploadGubreGorsel(String envanterId, Uint8List bytes, String filename) async {
+    if (_readOnlyBlocked) return null;
     try {
       final ext = filename.split('.').last.toLowerCase();
       final ref = FirebaseStorage.instance
@@ -465,6 +488,7 @@ class OperasyonService {
 
   /// Gübre görselini sil
   Future<bool> deleteGubreGorsel(String envanterId) async {
+    if (_readOnlyBlocked) return false;
     try {
       // Storage'dan sil
       final listResult = await FirebaseStorage.instance
@@ -530,6 +554,7 @@ class OperasyonService {
   }
 
   Future<String?> addKatlamaKaydi(KatlamaKaydi kaydi) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _katlamaRef.add(kaydi.toMap());
       return doc.id;
@@ -565,6 +590,7 @@ class OperasyonService {
   }
 
   Future<String?> addReceteGecmisi(ReceteGecmisi gecmis) async {
+    if (_readOnlyBlocked) return null;
     try {
       final doc = await _receteGecmisiRef.add(gecmis.toMap());
       return doc.id;
@@ -575,6 +601,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteReceteGecmisi(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _receteGecmisiRef.doc(id).delete();
       return true;
@@ -585,6 +612,7 @@ class OperasyonService {
   }
 
   Future<bool> deleteKatlamaKaydi(String id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _katlamaRef.doc(id).delete();
       return true;

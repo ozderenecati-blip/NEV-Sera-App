@@ -55,7 +55,9 @@ class AuthService {
         ];
 
         for (var user in defaultUsers) {
-          await _usersRef.add(user.toMap());
+          // Deterministik doc ID: es zamanli calisan iki cihaz ayni kullaniciyi
+          // iki kez ekleyemez (add() yerine set() ile yaris durumu onlenir)
+          await _usersRef.doc('default_${user.kullaniciAdi}').set(user.toMap());
         }
         debugPrint('Varsayılan kullanıcılar oluşturuldu');
       }

@@ -10,10 +10,14 @@ import '../models/satis.dart';
 import '../models/cari.dart';
 import '../services/database_service.dart';
 import '../services/notification_service.dart';
+import '../services/auth_service.dart';
 
 class AppProvider extends ChangeNotifier {
   final DatabaseService _db = DatabaseService();
   final NotificationService _notificationService = NotificationService();
+
+  /// Board Member (salt-okunur) kullanıcılar için merkezi yazma engeli
+  bool get _readOnlyBlocked => AuthService().currentUser?.isReadOnly ?? false;
 
   // Kasa verileri
   List<KasaHareketi> _kasaHareketleri = [];
@@ -183,6 +187,7 @@ class AppProvider extends ChangeNotifier {
   // ==================== KASA HAREKETLERİ ====================
 
   Future<bool> addKasaHareketi(KasaHareketi hareket) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertKasaHareketi(hareket);
       await loadKasaHareketleri();
@@ -204,6 +209,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateKasaHareketi(KasaHareketi hareket) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateKasaHareketi(hareket);
       await loadKasaHareketleri();
@@ -219,6 +225,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteKasaHareketi(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       // Silinecek hareketi bul (transfer ise karşı bacağını da silmek için)
       final eslesenler = _kasaHareketleri.where((h) => h.id == id).toList();
@@ -257,6 +264,7 @@ class AppProvider extends ChangeNotifier {
   // ==================== GÜNDELİKÇİLER ====================
 
   Future<bool> addGundelikci(Gundelikci gundelikci) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertGundelikci(gundelikci);
       await loadGundelikciler();
@@ -269,6 +277,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateGundelikci(Gundelikci gundelikci) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateGundelikci(gundelikci);
       await loadGundelikciler();
@@ -281,6 +290,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteGundelikci(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteGundelikci(id);
       await loadGundelikciler();
@@ -385,6 +395,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addKredi(Kredi kredi) async {
+    if (_readOnlyBlocked) return false;
     try {
       final krediId = await _db.insertKredi(kredi);
       final krediWithId = kredi.copyWith(id: krediId);
@@ -402,6 +413,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteKredi(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteKredi(id);
       _krediler = await _db.getKrediler();
@@ -430,6 +442,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateTaksitTarih(int krediId, int taksitId, DateTime yeniTarih) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateTaksitTarih(taksitId, yeniTarih);
       _krediler = await _db.getKrediler();
@@ -474,6 +487,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addOrtak(Ortak ortak) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertOrtak(ortak);
       await loadOrtaklar();
@@ -486,6 +500,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateOrtak(Ortak ortak) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateOrtak(ortak);
       await loadOrtaklar();
@@ -498,6 +513,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteOrtak(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteOrtak(id);
       await loadOrtaklar();
@@ -625,6 +641,7 @@ class AppProvider extends ChangeNotifier {
   // ==================== SETTINGS ====================
 
   Future<bool> addSetting(String tip, String deger) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertSetting(AppSettings(tip: tip, deger: deger));
       await loadSettings();
@@ -637,6 +654,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addSettingFull(AppSettings setting) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertSetting(setting);
       await loadSettings();
@@ -649,6 +667,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addSettingWithOrtak(String tip, String deger, int? ortakId) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertSetting(AppSettings(tip: tip, deger: deger, ortakId: ortakId));
       await loadSettings();
@@ -661,6 +680,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateSetting(AppSettings setting) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateSetting(setting);
       await loadSettings();
@@ -673,6 +693,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteSetting(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteSetting(id);
       await loadSettings();
@@ -721,6 +742,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addCari(Cari cari) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertCari(cari);
       await loadCariler();
@@ -733,6 +755,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateCari(Cari cari) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateCari(cari);
       await loadCariler();
@@ -745,6 +768,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteCari(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteCari(id);
       await loadCariler();
@@ -757,6 +781,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addCariAnlasma(CariAnlasma anlasma) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertCariAnlasma(anlasma);
       await loadCariler();
@@ -769,6 +794,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateCariAnlasma(CariAnlasma anlasma) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateCariAnlasma(anlasma);
       await loadCariler();
@@ -781,6 +807,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> deleteCariAnlasma(int id) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.deleteCariAnlasma(id);
       await loadCariler();
@@ -800,6 +827,7 @@ class AppProvider extends ChangeNotifier {
   // ==================== YAKLAŞAN ÖDEMELER ====================
 
   Future<void> addYaklasanOdeme(YaklasanOdeme odeme) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.insertYaklasanOdeme(odeme);
       _yaklasanOdemeler = await _db.getYaklasanOdemeler();
@@ -811,6 +839,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> updateYaklasanOdeme(YaklasanOdeme odeme) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.updateYaklasanOdeme(odeme);
       _yaklasanOdemeler = await _db.getYaklasanOdemeler();
@@ -822,6 +851,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> deleteYaklasanOdeme(int id) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.deleteYaklasanOdeme(id);
       _yaklasanOdemeler = await _db.getYaklasanOdemeler();
@@ -881,6 +911,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> addMusteri(Musteri musteri) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.insertMusteri(musteri);
       await loadMusteriler();
@@ -893,6 +924,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<bool> updateMusteri(Musteri musteri) async {
+    if (_readOnlyBlocked) return false;
     try {
       await _db.updateMusteri(musteri);
       await loadMusteriler();
@@ -905,6 +937,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> deleteMusteri(int id) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.deleteMusteri(id);
       await loadMusteriler();
@@ -932,6 +965,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> addSatis(Satis satis) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.insertSatis(satis);
       await loadSatislar();
@@ -943,6 +977,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> updateSatis(Satis satis) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.updateSatis(satis);
       await loadSatislar();
@@ -954,6 +989,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> deleteSatis(int id) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.deleteSatis(id);
       await loadSatislar();
@@ -979,6 +1015,7 @@ class AppProvider extends ChangeNotifier {
     String? bankaAdi,
     String? aciklama,
   }) async {
+    if (_readOnlyBlocked) return;
     try {
       final tahsilat = {
         'musteri_id': musteriId,
@@ -1031,6 +1068,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> deleteTahsilat(int id) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.deleteTahsilat(id);
       await loadMusteriler();
@@ -1042,6 +1080,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> updateTahsilat(int id, Map<String, dynamic> data) async {
+    if (_readOnlyBlocked) return;
     try {
       await _db.updateTahsilat(id, data);
       await loadMusteriler();

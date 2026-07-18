@@ -617,6 +617,16 @@ class DatabaseService {
     );
   }
 
+  Future<void> updateTaksitTarih(int taksitId, DateTime yeniTarih) async {
+    final db = await database;
+    await db.update(
+      'kredi_taksitleri',
+      {'vade_tarihi': yeniTarih.toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [taksitId],
+    );
+  }
+
   Future<Map<String, double>> getKrediOzet() async {
     final db = await database;
     final krediResult = await db.rawQuery('''

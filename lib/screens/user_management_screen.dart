@@ -204,6 +204,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         return const Color(0xFFD97706);
       case UserRole.calisan:
         return const Color(0xFF2563EB);
+      case UserRole.boardMember:
+        return const Color(0xFF0891B2);
     }
   }
 
@@ -215,6 +217,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         return Icons.agriculture;
       case UserRole.calisan:
         return Icons.person;
+      case UserRole.boardMember:
+        return Icons.assessment;
     }
   }
 
@@ -569,6 +573,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         return 'Operasyon Yöneticisi';
       case UserRole.calisan:
         return 'Çalışan';
+      case UserRole.boardMember:
+        return 'Yönetim Kurulu (Sadece Görüntüleme)';
     }
   }
 }

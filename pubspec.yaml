@@ -1,7 +1,7 @@
 name: nev_seracilik_app
 description: "NEV Seracılık - Harcama Takip Uygulaması"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.7.0-209.1.beta

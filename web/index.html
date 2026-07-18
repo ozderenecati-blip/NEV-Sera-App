@@ -46,23 +46,54 @@
     <div style="margin-top:24px;width:40px;height:40px;border:3px solid rgba(255,255,255,0.2);border-top:3px solid white;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
   </div>
   <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+  <!-- Yeni surum bildirimi -->
+  <div id="update-banner" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#065F46;color:white;padding:12px 20px;border-radius:12px;z-index:10000;box-shadow:0 4px 16px rgba(0,0,0,0.3);align-items:center;gap:12px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;">
+    <span>Yeni s&#252;r&#252;m haz&#305;r</span>
+    <button id="update-btn" style="background:white;color:#065F46;border:none;padding:8px 16px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;">Yenile</button>
+  </div>
   <script>
     window.addEventListener('flutter-first-frame', function() {
       var splash = document.getElementById('splash');
       if (splash) splash.style.display = 'none';
     });
 
-    // Force clear old service worker caches on load
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for (var registration of registrations) {
-          registration.unregister();
-        }
+    // Yeni surum kontrolu: version.json + buildNumber degisince banner goster
+    // (Flutter'in service worker'i kaldirildigi icin HTTP onbellek + ETag kullanilir)
+    (function() {
+      var currentVersion = null;
+
+      function fetchVersion() {
+        return fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .catch(function() { return null; });
+      }
+
+      function checkForUpdate() {
+        fetchVersion().then(function(v) {
+          if (!v) return;
+          var tag = (v.version || '') + '+' + (v.build_number || '');
+          if (currentVersion === null) { currentVersion = tag; return; }
+          if (tag !== currentVersion) {
+            var banner = document.getElementById('update-banner');
+            if (banner) banner.style.display = 'flex';
+          }
+        });
+      }
+
+      document.getElementById('update-btn').onclick = function() {
+        this.disabled = true;
+        location.reload();
+      };
+
+      window.addEventListener('load', function() {
+        checkForUpdate(); // ilk deger kaydi
+        setInterval(checkForUpdate, 5 * 60 * 1000); // 5 dakikada bir kontrol
+        // Uygulama arka plandan one gelince de kontrol et (mobil icin)
+        document.addEventListener('visibilitychange', function() {
+          if (document.visibilityState === 'visible') checkForUpdate();
+        });
       });
-      caches.keys().then(function(names) {
-        for (var name of names) caches.delete(name);
-      });
-    }
+    })();
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
